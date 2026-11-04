@@ -1,0 +1,52 @@
+{
+  "name": "pokecollector",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "start:compatible": "npm exec --yes --package=node@22.22.3 -- node ./node_modules/@angular/cli/bin/ng.js serve --host 127.0.0.1",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "lint": "eslint \"src/**/*.ts\" \"src/**/*.html\"",
+    "test:e2e": "playwright test",
+    "data:prepare": "node scripts/prepare-data.mjs"
+  },
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
+  },
+  "private": true,
+  "packageManager": "npm@10.9.7",
+  "dependencies": {
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/forms": "^22.2.0",
+    "@angular/platform-browser": "^22.2.0",
+    "@angular/router": "^22.2.0",
+    "lucide": "^1.67.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.2.5",
+    "@angular/cli": "^22.2.5",
+    "@angular/compiler-cli": "^22.2.0",
+    "@eslint/js": "^10.0.1",
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "@playwright/test": "^1.64.1",
+    "angular-eslint": "^22.6.0",
+    "csv-parse": "^7.0.3",
+    "eslint": "^10.14.0",
+    "jsdom": "^30.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.0"
+  }
+}

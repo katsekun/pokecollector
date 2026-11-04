@@ -1,0 +1,12 @@
+{
+  "preparedAt": "2026-11-04T09:07:18.618Z",
+  "pokeRevision": "e5b79b2e15d7c50735a945936afd4cd1cfd94eae",
+  "speciesCount": 1545,
+  "nationalSpeciesCount": 1025,
+  "excludedForms": [
+    "gmax"
+  ],
+  "speciesSource": "https://github.com/PokeAPI/pokeapi/tree/e5b79b2e15d7c50735a945936afd4cd1cfd94eae/data/v2/csv",
+  "cardsSource": "https://tcgdex.dev/",
+  "note": "All PokeAPI forms except Gigantamax. Internal form IDs are distinct from national numbers. No card samples bundled."
+}

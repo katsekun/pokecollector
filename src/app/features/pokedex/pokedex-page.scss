@@ -1,0 +1,484 @@
+.pokedex__edition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font: 500 0.6rem var(--display-font);
+  color: var(--muted);
+}
+.pokedex__edition > span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: #d7785a;
+}
+.pokedex__edition small {
+  border-left: 1px solid var(--line-strong);
+  padding-left: 0.5rem;
+  font-size: 0.6rem;
+}
+.collection-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--line);
+  padding: 1.5rem 0;
+  margin-bottom: 0.5rem;
+}
+.collection-stats__item {
+  padding: 0 1.5rem;
+  border-right: 1px solid var(--line);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.collection-stats__item:first-child {
+  padding-left: 0;
+}
+.collection-stats__item:last-child {
+  padding-right: 0;
+  border: 0;
+}
+.collection-stats__item > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.collection-stats__item:nth-child(2) app-icon {
+  color: #b66a56;
+}
+.collection-stats__item:nth-child(3) app-icon {
+  color: #838bba;
+}
+.collection-stats__item:nth-child(4) app-icon {
+  color: #b49646;
+}
+.collection-stats__item > strong {
+  font: 500 1.8rem var(--display-font);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.collection-stats__item > strong small {
+  font: 400 0.8rem var(--body-font);
+  color: var(--muted);
+}
+.collection-stats__note {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.collection-stats__progress {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.collection-stats__progress progress {
+  height: 0.25rem;
+  width: 100%;
+}
+.collection-stats__progress span {
+  white-space: nowrap;
+}
+.generation-progress {
+  margin-bottom: 1.75rem;
+  border-bottom: 1px solid var(--line);
+}
+.generation-progress summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.8rem 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.generation-progress summary::-webkit-details-marker {
+  display: none;
+}
+.generation-progress summary app-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.generation-progress__mobile-label,
+.generation-progress__finances {
+  display: none;
+}
+.generation-progress[open] summary app-icon {
+  transform: rotate(180deg);
+}
+.generation-progress__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  gap: 0.5rem;
+  padding-bottom: 1rem;
+}
+.generation-progress__item {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  text-align: left;
+  border-radius: 0.25rem;
+}
+.generation-progress__item--active {
+  border-color: var(--primary);
+  background: var(--surface);
+}
+.generation-progress__item > span {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.generation-progress__item strong {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.generation-progress__item small {
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+.generation-progress__item progress {
+  height: 0.2rem;
+  width: 100%;
+}
+.catalog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.catalog__header h2 {
+  font-size: 1.05rem;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  scroll-margin-top: 1rem;
+}
+.catalog__header h2 span {
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--surface-alt);
+  font: 400 0.65rem var(--body-font);
+  color: var(--muted);
+}
+.catalog__sample {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.catalog__toolbar {
+  display: flex;
+  gap: 0.6rem;
+}
+.catalog__toolbar > label:not(:first-child) {
+  flex-shrink: 0;
+  max-width: 12.5rem;
+}
+.catalog__toolbar select,
+.catalog__search input {
+  min-height: 2.65rem;
+  font-size: 0.72rem;
+}
+.catalog__search {
+  position: relative;
+  flex: 1;
+  min-width: 8rem;
+}
+.catalog__search app-icon {
+  position: absolute;
+  left: 0.8rem;
+  top: 0.8rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted);
+}
+.catalog__search input {
+  width: 100%;
+  padding-left: 2.35rem;
+  border-color: var(--line);
+}
+.catalog__toolbar select,
+.catalog__toolbar > button {
+  border-color: var(--line);
+}
+.catalog__filter-count {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  min-width: 1.1rem;
+  border-radius: 0.2rem;
+  font-size: 0.6rem;
+}
+.catalog__advanced {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 0.8rem;
+  align-items: end;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.catalog__advanced select {
+  font-size: 0.75rem;
+}
+.catalog__options {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.9rem 0 1.3rem;
+}
+.catalog__checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+.catalog__sort {
+  flex-direction: row;
+  align-items: center;
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+.catalog__sort select {
+  min-height: 1.75rem;
+  padding: 0.3rem 0.6rem;
+  border: none;
+  background: transparent;
+  font-size: 0.65rem;
+}
+.specimen-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1.5rem 1rem;
+}
+.specimen {
+  min-width: 0;
+  display: block;
+  padding: 0.5rem 0.5rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  animation: appear 0.35s both;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.specimen:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+.specimen__image {
+  position: relative;
+}
+.specimen__corner {
+  position: absolute;
+  right: 0.35rem;
+  top: 0.35rem;
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  background: var(--wanted-bg);
+  color: var(--wanted-text);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: 0 0.1rem 0.5rem #0002;
+}
+.specimen__corner--owned {
+  background: var(--owned-bg);
+  color: var(--owned-text);
+}
+.specimen__corner app-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+.specimen__identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.7rem 0.2rem 0.2rem;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.specimen__identity app-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  color: #a48a3e;
+}
+.specimen h3 {
+  margin: 0 0.2rem;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.specimen p {
+  margin: 0.2rem 0.2rem 0.6rem;
+  color: var(--muted);
+  font-size: 0.6rem;
+  min-height: 1.8rem;
+  line-height: 1.5;
+}
+.specimen__status {
+  display: flex;
+  gap: 0.3rem;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0.2rem;
+}
+.specimen__status .badge {
+  font-size: 0.55rem;
+  min-height: 1.3rem;
+  padding: 0.15rem 0.35rem;
+}
+.specimen__rarity {
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+@media (min-width: 1700px) {
+  .specimen-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1300px) {
+  .specimen-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .collection-stats__item {
+    padding-inline: 1rem;
+  }
+  .catalog__advanced {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1000px) {
+  .collection-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem 0;
+  }
+  .collection-stats__item:nth-child(2) {
+    border: 0;
+  }
+  .collection-stats__item:nth-child(3) {
+    padding-left: 0;
+  }
+  .catalog__toolbar {
+    flex-wrap: wrap;
+  }
+  .catalog__search {
+    flex-basis: 100%;
+  }
+  .catalog__toolbar > label:not(:first-child) {
+    flex: 1;
+    max-width: none;
+  }
+  .catalog__toolbar select {
+    width: 100%;
+  }
+  .specimen-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .pokedex__edition,
+  .collection-stats__item:nth-child(n + 3),
+  .generation-progress__desktop-label {
+    display: none;
+  }
+  .collection-stats {
+    padding-block: 1rem;
+  }
+  .collection-stats__item > strong {
+    font-size: 1.5rem;
+  }
+  .collection-stats__item > span:first-child {
+    font-size: 0.65rem;
+  }
+  .collection-stats__note {
+    font-size: 0.6rem;
+  }
+  .generation-progress__mobile-label {
+    display: inline;
+  }
+  .generation-progress__finances {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 1rem 0;
+    margin: 0;
+    border-top: 1px solid var(--line);
+  }
+  .generation-progress__finances dt {
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+  .generation-progress__finances dd {
+    font-size: 0.9rem;
+    margin: 0.4rem 0 0;
+  }
+  .generation-progress__finances small {
+    display: block;
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: 0.3rem;
+  }
+  .catalog__sort > span {
+    display: none;
+  }
+  .catalog__sample {
+    font-size: 0.6rem;
+  }
+  .catalog__header {
+    gap: 0.5rem;
+  }
+  .specimen-grid {
+    gap: 1rem 0.75rem;
+  }
+}
+@media (max-width: 480px) {
+  .specimen-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .catalog__toolbar {
+    gap: 0.4rem;
+  }
+  .catalog__toolbar select {
+    font-size: 0.65rem;
+    padding-inline: 0.5rem;
+  }
+  .catalog__toolbar > button {
+    width: 2.75rem;
+    padding: 0.5rem;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .catalog__filter-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .catalog__filter-count {
+    position: absolute;
+    top: -0.35rem;
+    right: -0.25rem;
+  }
+  .catalog__advanced {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .specimen {
+    animation: none;
+    transition: none;
+  }
+}

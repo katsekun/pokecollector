@@ -1,0 +1,350 @@
+<div class="page-heading">
+  <div>
+    <span class="page-heading__eyebrow"
+      ><app-icon [name]="isWishlist ? 'heart' : 'book'" />
+      {{ isWishlist ? 'MIS PRÓXIMAS CARTAS' : 'POKÉDEX COMPLETA' }}</span
+    >
+    <h1>{{ isWishlist ? 'Lista de deseos' : 'Mi Pokédex' }}</h1>
+    <p class="page-heading__subtitle">
+      {{ store._allSpecies().length.toLocaleString('es-ES') }} entradas ·
+      {{ store._nationalCount().toLocaleString('es-ES') }} especies · Sin Gigamax
+    </p>
+  </div>
+  <span class="pokedex__edition"
+    ><span aria-hidden="true"></span> COLECCIÓN PERSONAL <small>VOL. 01</small></span
+  >
+</div>
+
+<section class="collection-stats" aria-label="Resumen de colección">
+  <div class="collection-stats__item">
+    <span><app-icon name="owned" /> En colección</span
+    ><strong
+      >{{ store._progress().owned }}
+      <small>/ {{ store._progress().total.toLocaleString('es-ES') }}</small></strong
+    >
+    <div class="collection-stats__progress">
+      <progress
+        [value]="store._progress().owned"
+        [max]="store._progress().total"
+        aria-label="Porcentaje completado"
+      ></progress
+      ><span>{{ store._progress().percent.toFixed(1).replace('.', ',') }} %</span>
+    </div>
+  </div>
+  <div class="collection-stats__item">
+    <span><app-icon name="heart" /> En mi lista de deseos</span
+    ><strong>{{ store._wantedCount() }} <small>cartas</small></strong
+    ><span class="collection-stats__note">Pendientes de conseguir</span>
+  </div>
+  <div class="collection-stats__item">
+    <span><app-icon name="book" /> Total invertido</span
+    ><strong>{{ store._totals().paidKnown ? euros(store._totals().paid) : '—' }}</strong
+    ><span class="collection-stats__note"
+      >{{ store._totals().paidKnown }} cartas con precio pagado</span
+    >
+  </div>
+  <div class="collection-stats__item">
+    <span><app-icon name="sparkle" /> Valoración manual</span
+    ><strong>{{ store._totals().valueKnown ? euros(store._totals().value) : '—' }}</strong
+    ><span class="collection-stats__note"
+      >{{ store._totals().valueKnown }} cartas valoradas · EUR</span
+    >
+  </div>
+</section>
+
+<details class="generation-progress">
+  <summary>
+    <span class="generation-progress__desktop-label">Progreso por generación</span
+    ><span class="generation-progress__mobile-label">Progreso y valoración</span
+    ><app-icon name="down" />
+  </summary>
+  <div class="generation-progress__grid">
+    @for (generation of store._generations(); track generation.id) {
+      <button
+        type="button"
+        class="generation-progress__item"
+        [class.generation-progress__item--active]="view._filters().generation === generation.id"
+        (click)="
+          setFilter('generation', view._filters().generation === generation.id ? 0 : generation.id)
+        "
+      >
+        <span>{{ regions[generation.id] ?? 'Generación ' + generation.id }}</span
+        ><strong
+          >{{ generation.owned }} <small>/ {{ generation.total }}</small></strong
+        ><progress
+          [value]="generation.owned"
+          [max]="generation.total"
+          [attr.aria-label]="'Progreso de ' + regions[generation.id]"
+        ></progress>
+      </button>
+    }
+  </div>
+  <dl class="generation-progress__finances">
+    <div>
+      <dt>Total invertido</dt>
+      <dd>
+        {{ store._totals().paidKnown ? euros(store._totals().paid) : 'Sin registrar'
+        }}<small>{{ store._totals().paidKnown }} cartas con precio pagado</small>
+      </dd>
+    </div>
+    <div>
+      <dt>Valoración manual</dt>
+      <dd>
+        {{ store._totals().valueKnown ? euros(store._totals().value) : 'Sin valorar'
+        }}<small>{{ store._totals().valueKnown }} cartas valoradas · EUR</small>
+      </dd>
+    </div>
+  </dl>
+</details>
+
+<section class="catalog" aria-labelledby="catalog-heading">
+  <div class="catalog__header">
+    <div>
+      <h2 id="catalog-heading">
+        {{ isWishlist ? 'Cartas que quiero' : 'Todas las generaciones' }}
+        <span>{{ _results().length }}</span>
+      </h2>
+    </div>
+    <span class="catalog__sample">{{ store._entries().length }} cartas elegidas · TCGdex</span>
+  </div>
+  <div class="catalog__toolbar">
+    <label class="catalog__search"
+      ><span class="sr-only">Buscar Pokémon</span><app-icon name="search" /><input
+        type="search"
+        placeholder="Buscar Pokémon o nº de Pokédex…"
+        [ngModel]="view._filters().query"
+        (ngModelChange)="setFilter('query', $event)"
+    /></label>
+    <label
+      ><span class="sr-only">Generación</span
+      ><select
+        [ngModel]="view._filters().generation"
+        (ngModelChange)="setFilter('generation', $event)"
+      >
+        <option [ngValue]="0">Todas las generaciones</option>
+        @for (generation of store._generations(); track generation.id) {
+          <option [ngValue]="generation.id">
+            {{ regions[generation.id] ?? 'Generación ' + generation.id }}
+          </option>
+        }
+      </select></label
+    >
+    @if (!isWishlist) {
+      <label
+        ><span class="sr-only">Estado</span
+        ><select
+          aria-label="Estado"
+          [ngModel]="view._filters().status"
+          (ngModelChange)="setFilter('status', $event)"
+        >
+          <option value="all">Todos los estados</option>
+          <option value="owned">En colección</option>
+          <option value="wanted">Deseos</option>
+          <option value="missing">Me faltan</option>
+        </select></label
+      >
+    }
+    <button
+      class="button button--outline"
+      type="button"
+      [attr.aria-expanded]="_advanced()"
+      aria-controls="advanced-filters"
+      title="Filtros avanzados"
+      (click)="_advanced.update((value) => !value)"
+    >
+      <app-icon name="filters" /><span class="catalog__filter-label"
+        >Filtros<span class="sr-only"> avanzados</span></span
+      >
+      @if (_activeFilterCount()) {
+        <span class="catalog__filter-count" aria-hidden="true">{{ _activeFilterCount() }}</span>
+      }
+    </button>
+  </div>
+  @if (_advanced()) {
+    <div id="advanced-filters" class="catalog__advanced">
+      <label
+        >Tipo de forma<select
+          [ngModel]="view._filters().formType"
+          (ngModelChange)="setFilter('formType', $event)"
+        >
+          <option value="all">Todas las formas</option>
+          <option value="default">Formas principales</option>
+          <option value="regional">Formas regionales</option>
+          <option value="mega">Megaevoluciones</option>
+          <option value="other">Otras formas</option>
+        </select></label
+      >
+      <label
+        >Ilustración<select
+          [ngModel]="view._filters().illustration"
+          (ngModelChange)="setFilter('illustration', $event)"
+        >
+          <option value="">Todas las cartas</option>
+          <option value="special">Ilustraciones especiales</option>
+          <option value="full-art">Full Art</option>
+          <option value="illustration-rare">Illustration Rare</option>
+          <option value="special-illustration-rare">Special Illustration Rare</option>
+          <option value="standard">Clásicas</option>
+        </select></label
+      >
+      <label
+        >Idioma<select
+          [ngModel]="view._filters().language"
+          (ngModelChange)="setFilter('language', $event)"
+        >
+          <option value="">Todos los idiomas</option>
+          @for (language of _languages(); track language) {
+            <option [value]="language">{{ language.toUpperCase() }}</option>
+          }
+        </select></label
+      >
+      <label
+        >Expansión<select
+          [ngModel]="view._filters().set"
+          (ngModelChange)="setFilter('set', $event)"
+        >
+          <option value="">Todas las expansiones</option>
+          @for (set of _sets(); track set) {
+            <option [value]="set">{{ set }}</option>
+          }
+        </select></label
+      >
+      <button type="button" class="button button--quiet" (click)="resetFilters()">
+        <app-icon name="close" /> Limpiar filtros
+      </button>
+    </div>
+  }
+  <div class="catalog__options">
+    <label class="catalog__checkbox"
+      ><input
+        type="checkbox"
+        [ngModel]="view._filters().availableOnly"
+        (ngModelChange)="setFilter('availableOnly', $event)"
+      />
+      Con carta elegida</label
+    ><label class="catalog__sort"
+      ><span>Ordenar:</span
+      ><select
+        aria-label="Ordenar cartas"
+        [ngModel]="view._filters().sort"
+        (ngModelChange)="setFilter('sort', $event)"
+      >
+        <option value="number">Nº de Pokédex</option>
+        <option value="name">Nombre A–Z</option>
+        <option value="art">Ilustraciones primero</option>
+      </select></label
+    >
+  </div>
+  @if (_visible().length) {
+    <div class="specimen-grid">
+      @for (pokemon of _visible(); track pokemon.id; let index = $index) {
+        @let card = preview(pokemon);
+        @let entry = store.entry(pokemon.id);
+        <a
+          class="specimen"
+          [routerLink]="['/pokemon', pokemon.id]"
+          [queryParams]="{ from: isWishlist ? 'deseos' : null }"
+          [attr.aria-label]="'Ver cartas de ' + pokemon.name"
+          [style.animation-delay.ms]="(index % 6) * 35"
+        >
+          <div class="specimen__image">
+            <app-card-art
+              [card]="card"
+              [name]="pokemon.name"
+              [speciesId]="nationalNumber(pokemon)"
+              [eager]="index < 6"
+            />
+            @if (entry) {
+              <span
+                class="specimen__corner"
+                [class.specimen__corner--owned]="entry.status === 'owned'"
+                ><app-icon [name]="entry.status === 'owned' ? 'check' : 'heart'"
+              /></span>
+            }
+          </div>
+          <div class="specimen__identity">
+            <span>#{{ nationalNumber(pokemon).toString().padStart(4, '0') }}</span>
+            @if (card && card.illustration !== 'standard') {
+              <app-icon name="sparkle" />
+            }
+          </div>
+          <h3>{{ pokemon.name }}</h3>
+          <p>
+            {{ card ? card.set + ' · ' + card.language.toUpperCase() : 'Sin carta elegida' }}
+          </p>
+          <div class="specimen__status">
+            <span
+              class="badge"
+              [class.badge--owned]="entry?.status === 'owned'"
+              [class.badge--wanted]="entry?.status === 'wanted'"
+              >{{
+                entry?.needsFormReview
+                  ? 'Revisar forma'
+                  : entry?.status === 'owned'
+                    ? 'En colección'
+                    : entry?.status === 'wanted'
+                      ? 'En deseos'
+                      : 'Sin elegir'
+              }}</span
+            >
+            @if (card && card.illustration !== 'standard') {
+              <span class="specimen__rarity" [title]="illustrationLabels[card.illustration]">{{
+                card.illustration === 'full-art'
+                  ? 'FA'
+                  : card.illustration === 'illustration-rare'
+                    ? 'IR'
+                    : 'SIR'
+              }}</span>
+            }
+          </div>
+        </a>
+      }
+    </div>
+    <nav class="pagination" aria-label="Páginas de Pokémon">
+      <span
+        >{{ (_currentPage() - 1) * pageSize + 1 }}–{{
+          (_currentPage() - 1) * pageSize + _visible().length
+        }}
+        de {{ _results().length }}</span
+      >
+      <div>
+        <button
+          type="button"
+          class="icon-button"
+          [disabled]="_currentPage() === 1"
+          (click)="changePage(_currentPage() - 1)"
+          title="Página anterior"
+          aria-label="Página anterior"
+        >
+          <app-icon name="previous" /></button
+        ><span>{{ _currentPage() }} / {{ _pages() }}</span
+        ><button
+          type="button"
+          class="icon-button"
+          [disabled]="_currentPage() === _pages()"
+          (click)="changePage(_currentPage() + 1)"
+          title="Página siguiente"
+          aria-label="Página siguiente"
+        >
+          <app-icon name="next" />
+        </button>
+      </div>
+    </nav>
+  } @else {
+    <div class="empty-state">
+      <app-icon [name]="isWishlist ? 'heart' : 'search'" />
+      <h2>
+        {{
+          isWishlist && !_activeFilterCount()
+            ? 'Tu lista de deseos está vacía'
+            : 'No hay Pokémon con estos filtros'
+        }}
+      </h2>
+      @if (_activeFilterCount()) {
+        <button class="button button--outline" (click)="resetFilters()">Limpiar filtros</button>
+      } @else if (isWishlist) {
+        <a routerLink="/" class="button button--primary"><app-icon name="grid" /> Ver Pokédex</a>
+      }
+    </div>
+  }
+</section>

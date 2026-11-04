@@ -1,0 +1,208 @@
+<a class="detail__back" [routerLink]="returnPath"
+  ><app-icon name="back" /> Volver
+  {{
+    returnPath === '/deseos' ? 'a deseos' : returnPath === '/albumes' ? 'a álbumes' : 'a la Pokédex'
+  }}</a
+>
+@if (_pokemon(); as pokemon) {
+  <div class="page-heading">
+    <div>
+      <span class="page-heading__eyebrow"
+        >#{{ nationalNumber(pokemon).toString().padStart(4, '0') }} ·
+        {{ regions[pokemon.generation] ?? 'Generación ' + pokemon.generation }}</span
+      >
+      <h1>{{ pokemon.name }}</h1>
+    </div>
+    @if (_entry(); as entry) {
+      <span
+        class="badge"
+        [class.badge--owned]="entry.status === 'owned'"
+        [class.badge--wanted]="entry.status === 'wanted'"
+        ><app-icon [name]="entry.status === 'owned' ? 'check' : 'heart'" />{{
+          entry.status === 'owned' ? 'En colección' : 'En mi lista de deseos'
+        }}</span
+      >
+    }
+  </div>
+  <app-tcgdex-browser
+    [speciesId]="pokemon.id"
+    [pokemon]="pokemon"
+    [forms]="_siblings()"
+    [selectedCardId]="_preview()?.id ?? ''"
+    (cardPreview)="_remotePreview.set($event); _feedback.set('')"
+    (firstCard)="showInitialCard($event)"
+  />
+  @if (_preview(); as card) {
+    <div class="detail">
+      <section class="detail__art" aria-label="Imagen de la carta">
+        <button
+          type="button"
+          class="detail__image-button"
+          (click)="zoomDialog.showModal()"
+          aria-label="Ampliar imagen de la carta"
+        >
+          <app-card-art
+            [card]="card"
+            [name]="pokemon.name"
+            [speciesId]="nationalNumber(pokemon)"
+            [eager]="true"
+          /><span class="detail__zoom"><app-icon name="zoom" /></span>
+        </button>
+        <div class="detail__art-meta">
+          <span>{{ card.set }} · {{ card.number }}</span
+          ><a [href]="card.source" target="_blank" rel="noopener noreferrer"
+            >Fuente <app-icon name="arrow"
+          /></a>
+        </div>
+        <dialog #zoomDialog class="image-dialog" aria-label="Imagen ampliada de la carta">
+          <button
+            type="button"
+            class="icon-button image-dialog__close"
+            (click)="zoomDialog.close()"
+            aria-label="Cerrar imagen ampliada"
+            autofocus
+          >
+            <app-icon name="close" /></button
+          ><app-card-art
+            [card]="card"
+            [name]="pokemon.name"
+            [speciesId]="nationalNumber(pokemon)"
+            [eager]="true"
+          />
+        </dialog>
+      </section>
+      <div class="detail__information">
+        <section class="detail__section">
+          <div class="detail__title">
+            <h2>{{ card.name }}</h2>
+            <span class="badge" [class.badge--art]="card.illustration !== 'standard'"
+              ><app-icon name="sparkle" />{{ illustrationLabels[card.illustration] }}</span
+            >
+          </div>
+          <dl class="detail__metadata">
+            <div>
+              <dt>Expansión</dt>
+              <dd>{{ card.set }}</dd>
+            </div>
+            <div>
+              <dt>Número de carta</dt>
+              <dd>{{ card.number }}</dd>
+            </div>
+            <div>
+              <dt>Idioma</dt>
+              <dd>{{ card.language.toUpperCase() }}</dd>
+            </div>
+            <div>
+              <dt>Rareza original</dt>
+              <dd>{{ card.rarity }}</dd>
+            </div>
+          </dl>
+          <div class="detail__actions">
+            <button
+              type="button"
+              class="button"
+              [class.button--primary]="!_isSelected() || _entry()?.status !== 'owned'"
+              [class.button--outline]="_isSelected() && _entry()?.status === 'owned'"
+              (click)="choose('owned')"
+            >
+              <app-icon name="check" />{{
+                _isSelected() && _entry()?.status === 'owned' ? 'Ya la tengo' : 'La tengo'
+              }}</button
+            ><button type="button" class="button button--outline" (click)="choose('wanted')">
+              <app-icon name="heart" />{{
+                _isSelected() && _entry()?.status === 'wanted' ? 'En mis deseos' : 'La quiero'
+              }}
+            </button>
+            @if (!_isSelected()) {
+              <button type="button" class="button button--quiet" (click)="choose()">
+                <app-icon name="sparkle" /> Elegir favorita
+              </button>
+            }
+          </div>
+          @if (_feedback()) {
+            <output class="detail__feedback" aria-live="polite">{{ _feedback() }}</output>
+          }
+        </section>
+        @if (_entry(); as entry) {
+          @if (entry.needsFormReview) {
+            <div class="notice notice--error" role="alert">
+              Esta carta anterior necesita revisar su forma. Se conservan sus importes, pero todavía
+              no cuenta para el progreso.
+            </div>
+          }
+          @if (entry.card.id !== card.id) {
+            <button
+              type="button"
+              class="button button--outline detail__saved-card"
+              (click)="_remotePreview.set(null)"
+            >
+              <app-icon name="heart" /> Ver carta guardada
+            </button>
+          }
+          <section class="detail__section" aria-labelledby="prices-heading">
+            <div class="detail__section-heading">
+              <h3 id="prices-heading">Mis importes</h3>
+              <span>EUR · {{ entry.card.name }} #{{ entry.card.number }}</span>
+            </div>
+            <form class="detail__prices" (ngSubmit)="savePrices()">
+              <label
+                >Precio pagado (€)<input
+                  type="text"
+                  inputmode="decimal"
+                  name="paid"
+                  placeholder="Sin registrar"
+                  maxlength="12"
+                  [ngModel]="_paid()"
+                  (ngModelChange)="_paid.set($event)" /></label
+              ><label
+                >Valoración manual (€)<input
+                  type="text"
+                  inputmode="decimal"
+                  name="value"
+                  placeholder="Sin valorar"
+                  maxlength="12"
+                  [ngModel]="_value()"
+                  (ngModelChange)="_value.set($event)" /></label
+              ><button class="button button--outline" type="submit">Guardar importes</button>
+            </form>
+            @if (entry.valuedAt) {
+              <p class="detail__date">
+                Valoración manual del {{ entry.valuedAt | date: 'dd/MM/yyyy' }}. Sin cotización de
+                mercado.
+              </p>
+            }
+          </section>
+          <section class="detail__section">
+            <div class="detail__section-heading">
+              <h3>Mis álbumes</h3>
+              <a routerLink="/albumes">Gestionar <app-icon name="arrow" /></a>
+            </div>
+            @if (store._albums().length) {
+              <div class="detail__album-list">
+                @for (album of store._albums(); track album.id) {
+                  <label
+                    ><input
+                      type="checkbox"
+                      [checked]="album.speciesIds.includes(pokemon.id)"
+                      (change)="store.toggleAlbumMember(album.id, pokemon.id)"
+                    />{{ album.name }}</label
+                  >
+                }
+              </div>
+            } @else {
+              <p class="detail__date">Todavía no hay álbumes.</p>
+            }
+          </section>
+          <button type="button" class="button button--quiet detail__remove" (click)="remove()">
+            <app-icon name="trash" /> Eliminar selección
+          </button>
+        }
+      </div>
+    </div>
+  }
+} @else {
+  <div class="empty-state">
+    <h1>Pokémon no encontrado</h1>
+    <a routerLink="/" class="button button--primary">Volver a la Pokédex</a>
+  </div>
+}

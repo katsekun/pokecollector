@@ -1,0 +1,222 @@
+.detail__back {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-bottom: 1.75rem;
+}
+.detail__back:hover {
+  color: var(--primary);
+}
+.detail {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.85fr) minmax(0, 1.25fr);
+  gap: 3rem;
+  align-items: start;
+}
+.detail__art {
+  min-width: 0;
+  position: sticky;
+  top: 2rem;
+}
+.detail__image-button {
+  display: block;
+  position: relative;
+  width: 100%;
+  max-width: 23rem;
+  margin-inline: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  box-shadow: var(--shadow);
+  cursor: zoom-in;
+}
+.detail__zoom {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 0.375rem;
+}
+.detail__art-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: 0.65rem;
+  max-width: 23rem;
+  margin: 1rem auto 0;
+}
+.detail__art-meta a,
+.detail__section-heading a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.detail__art-meta app-icon,
+.detail__section-heading a app-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+.detail__information {
+  min-width: 0;
+}
+.detail__section {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.detail__title {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.detail__title h2 {
+  font-size: 1.4rem;
+}
+.detail__title .badge {
+  max-width: 100%;
+  white-space: normal;
+}
+.detail__metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 1.5rem;
+}
+.detail__metadata dt {
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+.detail__metadata dd {
+  margin: 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.detail__feedback {
+  display: block;
+  color: var(--primary);
+  font-size: 0.75rem;
+  margin-top: 1rem;
+}
+.detail__section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.detail__section-heading > span,
+.detail__section-heading > a {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+.detail__saved-card {
+  margin-bottom: 1.5rem;
+}
+.detail__prices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  align-items: end;
+}
+.detail__prices > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.detail__prices input {
+  width: 100%;
+}
+.detail__date {
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: 0.75rem;
+}
+.detail__album-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+.detail__album-list label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.detail__remove {
+  color: var(--danger);
+}
+.image-dialog {
+  position: fixed;
+  border: none;
+  background: transparent;
+  padding: 2.75rem 0 0;
+  width: min(90vw, 35rem);
+  max-height: 94dvh;
+  overflow-y: auto;
+}
+.image-dialog::backdrop {
+  background: #070d0bd9;
+}
+.image-dialog app-card-art {
+  max-height: calc(90dvh - 3rem);
+  aspect-ratio: 734 / 1024;
+  width: auto;
+  margin: auto;
+}
+.image-dialog__close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  color: #fff;
+  background: #263d30;
+}
+@media (max-width: 1150px) {
+  .detail {
+    gap: 1.75rem;
+  }
+}
+@media (max-width: 900px) {
+  .detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .detail__art {
+    position: static;
+  }
+  .detail__image-button {
+    max-width: 18rem;
+  }
+  .detail__art-meta {
+    max-width: 18rem;
+  }
+}
+@media (max-width: 480px) {
+  .detail__metadata {
+    gap: 0.75rem;
+  }
+  .detail__title h2 {
+    font-size: 1.25rem;
+  }
+  .detail__back {
+    margin-bottom: 1.25rem;
+  }
+}
