@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { array, number, object, string, union } from 'zod';
 import { Card, cardSchema, PokemonSpecies } from './collection';
 import { findCardForm, nationalNumber } from './pokemon-forms';
@@ -104,13 +104,6 @@ export function mapTcgdexCard(
     if (image.protocol === 'https:' && image.hostname === 'assets.tcgdex.net')
       imageUrl = `${image.href.replace(/\/$/, '')}/high.webp`;
   }
-  if (imageUrl === null) {
-    const productId = detail.variants_detailed?.find(
-      (variant) => variant.thirdParty?.tcgplayer !== undefined,
-    )?.thirdParty?.tcgplayer;
-    if (productId !== undefined)
-      imageUrl = `https://tcgplayer-cdn.tcgplayer.com/product/${productId}_in_1000x1000.jpg`;
-  }
   const rarity = detail.rarity ?? 'Sin especificar';
   return cardSchema.parse({
     id: `tcgdex:${language}:${detail.id}`,
@@ -122,6 +115,7 @@ export function mapTcgdexCard(
     rarity,
     illustration: tcgdexIllustration(rarity, detail.set.id),
     image: imageUrl,
+    ...(imageUrl ? { imageProvider: 'tcgdex', imageLanguage: language } : {}),
     source: `https://api.tcgdex.net/v2/${language}/cards/${encodeURIComponent(detail.id)}`,
   });
 }
@@ -129,7 +123,60 @@ export function mapTcgdexCard(
 @Injectable({ providedIn: 'root' })
 export class TcgdexCatalog {
   public static readonly pageSize = 48;
+  public readonly _allowTcgplayer = signal(true);
   private readonly cache = new Map<string, { expires: number; result: Promise<TcgdexPage> }>();
+  private readonly detailCache = new Map<string, { expires: number; result: Promise<unknown> }>();
+  private readonly recoveryCache = new Map<string, { expires: number; result: Promise<Card> }>();
+  private activeDetailRequests = 0;
+  private readonly detailQueue: (() => void)[] = [];
+
+  public recoverImage(card: Card, failedImages: readonly string[]): Promise<Card> {
+    const allowTcgplayer = this._allowTcgplayer();
+    const key = JSON.stringify([
+      card.id,
+      card.source,
+      card.speciesId,
+      card.nationalId,
+      allowTcgplayer,
+      failedImages,
+    ]);
+    const cached = this.recoveryCache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.result;
+    const result = this.recoverCardImage(card, failedImages, allowTcgplayer);
+    this.recoveryCache.set(key, { expires: Date.now() + 10 * 60_000, result });
+    return result;
+  }
+
+  private async recoverCardImage(
+    card: Card,
+    failedImages: readonly string[],
+    allowTcgplayer: boolean,
+  ): Promise<Card> {
+    const withoutImage: Card = {
+      ...card,
+      image: null,
+      imageProvider: undefined,
+      imageLanguage: undefined,
+    };
+    const language = TCGDEX_LANGUAGES.find((candidate) => candidate.id === card.language)?.id;
+    if (!language || !URL.canParse(card.source)) return withoutImage;
+    const source = new URL(card.source);
+    if (
+      source.origin !== 'https://api.tcgdex.net' ||
+      !source.pathname.startsWith(`/v2/${language}/cards/`)
+    )
+      return withoutImage;
+    try {
+      const detail = detailSchema.parse(await this.readDetail(source.href, 5_000));
+      const mapped = mapTcgdexCard(detail, card.nationalId ?? card.speciesId, language);
+      if (mapped?.id !== card.id || String(detail.localId) !== card.number) return withoutImage;
+      if (mapped.image && !failedImages.includes(mapped.image))
+        return { ...card, image: mapped.image, imageProvider: 'tcgdex', imageLanguage: language };
+      return await this.resolveImage(withoutImage, detail, allowTcgplayer, failedImages);
+    } catch {
+      return withoutImage;
+    }
+  }
 
   public async searchForm(
     pokemon: PokemonSpecies,
@@ -163,27 +210,106 @@ export class TcgdexCatalog {
     ) {
       return Promise.reject(new Error('Consulta de catálogo no válida.'));
     }
-    const key = `${language}:${speciesId}:${page}`;
+    const allowTcgplayer = this._allowTcgplayer();
+    const key = `${language}:${speciesId}:${page}:${allowTcgplayer}`;
     const cached = this.cache.get(key);
     if (cached && cached.expires > Date.now()) return cached.result;
-    const result = this.fetchPage(speciesId, language, page).catch((error: unknown) => {
-      this.cache.delete(key);
-      throw error;
-    });
+    const result = this.fetchPage(speciesId, language, page, allowTcgplayer).catch(
+      (error: unknown) => {
+        this.cache.delete(key);
+        throw error;
+      },
+    );
     this.cache.set(key, { expires: Date.now() + 10 * 60_000, result });
     return result;
   }
 
-  private async readJson(url: string): Promise<unknown> {
-    const response = await fetch(url, { signal: AbortSignal.timeout(15_000), credentials: 'omit' });
+  private async readJson(url: string, timeout = 15_000): Promise<unknown> {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(timeout),
+      credentials: 'omit',
+    });
     if (!response.ok) throw new Error('TCGdex no está disponible. Inténtalo de nuevo más tarde.');
     return response.json();
+  }
+
+  private readDetail(url: string, timeout = 15_000): Promise<unknown> {
+    const cached = this.detailCache.get(url);
+    if (cached && cached.expires > Date.now()) return cached.result;
+    const result = this.fetchDetail(url, timeout).catch((error: unknown) => {
+      this.detailCache.delete(url);
+      throw error;
+    });
+    this.detailCache.set(url, { expires: Date.now() + 10 * 60_000, result });
+    return result;
+  }
+
+  private async fetchDetail(url: string, timeout: number): Promise<unknown> {
+    await new Promise<void>((resolve) => {
+      const start = (): void => {
+        this.activeDetailRequests += 1;
+        resolve();
+      };
+      if (this.activeDetailRequests < 3) start();
+      else this.detailQueue.push(start);
+    });
+    try {
+      return await this.readJson(url, timeout);
+    } finally {
+      this.activeDetailRequests -= 1;
+      this.detailQueue.shift()?.();
+    }
+  }
+
+  private async resolveImage(
+    card: Card,
+    detail: ReturnType<typeof detailSchema.parse>,
+    allowTcgplayer: boolean,
+    failedImages: readonly string[] = [],
+  ): Promise<Card> {
+    for (const language of ['en', 'fr'] as const) {
+      if (language === card.language) continue;
+      try {
+        const alternative = detailSchema.parse(
+          await this.readDetail(
+            `https://api.tcgdex.net/v2/${language}/cards/${encodeURIComponent(detail.id)}`,
+            5_000,
+          ),
+        );
+        if (
+          alternative.id !== detail.id ||
+          alternative.set.id !== detail.set.id ||
+          String(alternative.localId) !== String(detail.localId)
+        )
+          continue;
+        const mapped = mapTcgdexCard(alternative, card.nationalId ?? card.speciesId, language);
+        if (mapped?.image && !failedImages.includes(mapped.image))
+          return { ...card, image: mapped.image, imageProvider: 'tcgdex', imageLanguage: language };
+      } catch {
+        continue;
+      }
+    }
+    const productId = detail.variants_detailed?.find(
+      (variant) => variant.thirdParty?.tcgplayer !== undefined,
+    )?.thirdParty?.tcgplayer;
+    const marketplaceImage =
+      productId === undefined
+        ? null
+        : `https://tcgplayer-cdn.tcgplayer.com/product/${productId}_in_1000x1000.jpg`;
+    return allowTcgplayer && marketplaceImage && !failedImages.includes(marketplaceImage)
+      ? {
+          ...card,
+          image: marketplaceImage,
+          imageProvider: 'tcgplayer',
+        }
+      : card;
   }
 
   private async fetchPage(
     speciesId: number,
     language: TcgdexLanguage,
     page: number,
+    allowTcgplayer: boolean,
   ): Promise<TcgdexPage> {
     const base = `https://api.tcgdex.net/v2/${language}/cards`;
     const url = new URL(base);
@@ -198,14 +324,14 @@ export class TcgdexCatalog {
       const brief = queue.shift();
       if (!brief) return;
       const raw = detailSchema.parse(
-        await this.readJson(`${base}/${encodeURIComponent(brief.id)}`),
+        await this.readDetail(`${base}/${encodeURIComponent(brief.id)}`),
       );
       if (isPocketCard(raw.set.id, raw.image)) {
         pocketCards += 1;
         return next();
       }
       const card = mapTcgdexCard(raw, speciesId, language);
-      if (card) cards.push(card);
+      if (card) cards.push(card.image ? card : await this.resolveImage(card, raw, allowTcgplayer));
       return next();
     };
     await Promise.all(Array.from({ length: 3 }, () => next()));

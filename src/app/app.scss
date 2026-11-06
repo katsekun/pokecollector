@@ -147,8 +147,30 @@
 }
 .topbar__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
   align-items: center;
+}
+.auth__user {
+  max-width: 13rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.cloud-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.cloud-status small {
+  overflow-wrap: anywhere;
+  font-size: 0.65rem;
 }
 .topbar__divider {
   height: 1.25rem;
@@ -230,6 +252,17 @@
   }
   .topbar__actions > .icon-button {
     margin-right: auto;
+  }
+  .topbar__actions > .button > span {
+    display: none;
+  }
+  .topbar__actions > .button:not(.button--primary) {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    padding-inline: 0.5rem;
+  }
+  .auth__user {
+    display: none;
   }
   .topbar__divider {
     display: none;

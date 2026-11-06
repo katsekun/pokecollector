@@ -2,6 +2,8 @@ import { DOCUMENT } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { CollectionStore } from './core/collection-store';
+import { FirebaseAuthService } from './core/firebase-auth';
+import { FirebaseCloudSync } from './core/firebase-cloud-sync';
 import { Icon } from './shared/icon';
 
 @Component({
@@ -72,6 +74,7 @@ import { Icon } from './shared/icon';
           <button
             type="button"
             class="button button--quiet"
+            aria-label="Importar"
             (click)="fileInput.click()"
             [disabled]="store._isLoading() || !!store._catalogError()"
           >
@@ -80,6 +83,7 @@ import { Icon } from './shared/icon';
           <button
             type="button"
             class="button button--outline"
+            aria-label="Exportar"
             (click)="exportBackup()"
             [disabled]="store._isLoading() || store._storageBlocked()"
           >
@@ -92,6 +96,20 @@ import { Icon } from './shared/icon';
             hidden
             (change)="importBackup($event)"
           />
+          @if (auth._loading()) {
+            <button type="button" class="button button--outline" disabled>Conectando…</button>
+          } @else if (auth._user(); as user) {
+            <span class="auth__user" [title]="'UID: ' + user.uid">{{
+              user.email ?? 'Cuenta Google'
+            }}</span>
+            <button type="button" class="button button--outline" (click)="auth.signOut()">
+              Salir
+            </button>
+          } @else {
+            <button type="button" class="button button--primary" (click)="auth.signInWithGoogle()">
+              Entrar con Google
+            </button>
+          }
         </div>
       </header>
       <main id="main" class="workspace__main" tabindex="-1">
@@ -107,6 +125,57 @@ import { Icon } from './shared/icon';
               <app-icon name="close" />
             </button>
           </div>
+        }
+        @if (auth._error()) {
+          <div class="notice notice--error" role="alert">
+            <span>{{ auth._error() }}</span>
+            <button
+              type="button"
+              class="icon-button"
+              (click)="auth.clearError()"
+              aria-label="Cerrar error de autenticación"
+            >
+              <app-icon name="close" />
+            </button>
+          </div>
+        }
+        @if (cloudSync._error()) {
+          <div class="notice notice--error" role="alert">
+            <span>{{ cloudSync._error() }}</span>
+            <button type="button" class="button button--outline" (click)="cloudSync.retry()">
+              Reintentar nube
+            </button>
+            <button
+              type="button"
+              class="icon-button"
+              (click)="cloudSync.dismissError()"
+              aria-label="Cerrar error de sincronización"
+            >
+              <app-icon name="close" />
+            </button>
+          </div>
+        }
+        @if (auth._user()) {
+          <p class="cloud-status" role="status">
+            @switch (cloudSync._status()) {
+              @case ('connecting') {
+                Conectando colección local y Firebase…
+              }
+              @case ('saving') {
+                Guardando cambios en Firebase…
+              }
+              @case ('synced') {
+                Colección sincronizada con Firebase.
+              }
+              @case ('error') {
+                Los cambios siguen guardándose en este navegador.
+              }
+              @default {
+                Preparando sincronización segura…
+              }
+            }
+            <small>UID: {{ auth._user()?.uid }}</small>
+          </p>
         }
         @if (_feedback()) {
           <div class="notice" role="status">
@@ -145,6 +214,8 @@ import { Icon } from './shared/icon';
 })
 export class App implements OnInit {
   protected readonly store = inject(CollectionStore);
+  protected readonly auth = inject(FirebaseAuthService);
+  protected readonly cloudSync = inject(FirebaseCloudSync);
   private readonly document = inject(DOCUMENT);
   protected readonly _dark = signal(false);
   protected readonly _feedback = signal('');
@@ -164,7 +235,13 @@ export class App implements OnInit {
   }
 
   public ngOnInit(): void {
-    void this.store.initialize();
+    void this.initializeServices();
+  }
+
+  private async initializeServices(): Promise<void> {
+    await this.store.initialize();
+    await this.auth.start();
+    this.cloudSync.start();
   }
 
   protected toggleTheme(): void {

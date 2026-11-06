@@ -1,22 +1,26 @@
 {
   "name": "pokecollector",
   "version": "0.0.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
     "start:compatible": "npm exec --yes --package=node@22.22.3 -- node ./node_modules/@angular/cli/bin/ng.js serve --host 127.0.0.1",
     "build": "ng build",
+    "postbuild": "node scripts/prepare-licenses.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "eslint \"src/**/*.ts\" \"src/**/*.html\"",
     "test:e2e": "playwright test",
-    "data:prepare": "node scripts/prepare-data.mjs"
+    "data:prepare": "node scripts/prepare-data.mjs",
+    "assets:prepare": "node scripts/prepare-placeholders.mjs"
   },
   "engines": {
     "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
   },
   "overrides": {
-    "minimatch": "^11.0.1"
+    "minimatch": "^11.0.1",
+    "@grpc/grpc-js": "^1.13.6"
   },
   "private": true,
   "packageManager": "npm@10.9.7",
@@ -27,6 +31,7 @@
     "@angular/forms": "^22.2.0",
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
+    "firebase": "^13.2.0",
     "lucide": "^1.67.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",

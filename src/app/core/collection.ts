@@ -45,6 +45,8 @@ export const cardSchema = object({
     'special-illustration-rare',
   ]),
   image: httpsUrl.nullable(),
+  imageProvider: enumeration(['tcgdex', 'tcgplayer']).optional(),
+  imageLanguage: string().min(2).max(12).optional(),
   source: httpsUrl,
 });
 

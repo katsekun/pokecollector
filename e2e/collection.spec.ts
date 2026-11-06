@@ -66,7 +66,137 @@ test('complete national snapshot without a local card catalogue', async ({ reque
   expect(sampleRequests).toEqual([]);
 });
 
-test('missing and failed artwork uses the card back and selections survive reload', async ({
+test('reference artwork prioritizes TCGdex languages and enables TCGplayer by default', async ({
+  page,
+}, testInfo) => {
+  const image = await readFile('e2e/card-fixture.png');
+  const marketplaceRequests: string[] = [];
+  await page.route('https://tcgplayer-cdn.tcgplayer.com/**', (route) => {
+    marketplaceRequests.push(route.request().url());
+    return route.fulfill({ contentType: 'image/png', body: image });
+  });
+  await page.route('https://api.tcgdex.net/v2/**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/cards'))
+      return route.fulfill({ json: [1, 2, 3].map((number) => ({ id: `reference-${number}` })) });
+    const id = url.pathname.split('/').at(-1)!;
+    const number = id.split('-').at(-1)!;
+    const language = url.pathname.split('/')[2];
+    return route.fulfill({
+      json: {
+        id,
+        name: 'Bulbasaur',
+        localId: number,
+        dexId: [1],
+        rarity: 'Promo',
+        set: { id: 'mep', name: 'Promos' },
+        image: number === '1' && language === 'en' ? 'https://assets.tcgdex.net/en/me/mep/1' : null,
+        variants_detailed: number === '2' ? [{ thirdParty: { tcgplayer: 684461 } }] : [],
+      },
+    });
+  });
+  await page.goto('/pokemon/1');
+  const provider = page.getByLabel('Usar imágenes de TCGplayer', { exact: true });
+  await expect(provider).toBeChecked();
+  await expect(page.locator('.tcgdex__card')).toHaveCount(3);
+  await expect(page.getByText('Imagen de referencia · EN · TCGdex', { exact: true })).toBeVisible();
+  const marketplace = page.locator('.tcgdex__card').filter({ hasText: '· 2 · ES' });
+  await expect(
+    marketplace.getByText('Imagen de referencia · TCGplayer', { exact: true }),
+  ).toBeVisible();
+  await marketplace.scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      marketplace.locator('img').evaluate((element) => (element as HTMLImageElement).naturalWidth),
+    )
+    .toBeGreaterThan(0);
+  expect(marketplaceRequests.length).toBeGreaterThan(0);
+  await expect(
+    page.locator('.tcgdex__card').filter({ hasText: '· 3 · ES' }).locator('img'),
+  ).toHaveAttribute('src', '/cards/card-placeholder.png');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('reference-images.png'), fullPage: true });
+  await marketplace.click();
+  await expect(page.locator('.detail__image-button img')).toHaveAttribute(
+    'src',
+    'https://tcgplayer-cdn.tcgplayer.com/product/684461_in_1000x1000.jpg',
+  );
+  await page.getByRole('button', { name: 'La tengo', exact: true }).click();
+  await page.locator('.tcgdex > summary').click();
+  await provider.uncheck();
+  await expect(page.locator('.detail__image-button img')).toHaveAttribute(
+    'src',
+    '/cards/card-placeholder.png',
+  );
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem('pokecollector.collection.v1')!).entries[0].card,
+    ),
+  ).toMatchObject({
+    id: 'tcgdex:es:reference-2',
+    language: 'es',
+    imageProvider: 'tcgplayer',
+  });
+});
+
+test('broken artwork retries reference images before using the optional marketplace', async ({
+  page,
+}) => {
+  const image = await readFile('e2e/card-fixture.png');
+  const marketplaceRequests: string[] = [];
+  await page.route('https://api.tcgdex.net/v2/**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/cards'))
+      return route.fulfill({ json: [{ id: 'broken-1' }, { id: 'broken-2' }] });
+    const id = url.pathname.split('/').at(-1)!;
+    const language = url.pathname.split('/')[2];
+    return route.fulfill({
+      json: {
+        id,
+        name: 'Bulbasaur',
+        dexId: [1],
+        localId: id.endsWith('1') ? '1' : '2',
+        rarity: 'Promo',
+        set: { id: 'sv01', name: 'Scarlet & Violet' },
+        image: `https://assets.tcgdex.net/${language}/sv/sv01/${id}`,
+        variants_detailed: [{ thirdParty: { tcgplayer: 684461 } }],
+      },
+    });
+  });
+  await page.route('https://assets.tcgdex.net/**', (route) =>
+    route.request().url().includes('/fr/sv/sv01/broken-1/')
+      ? route.fulfill({ contentType: 'image/png', body: image })
+      : route.abort(),
+  );
+  await page.route('https://tcgplayer-cdn.tcgplayer.com/**', (route) => {
+    marketplaceRequests.push(route.request().url());
+    return route.fulfill({ contentType: 'image/png', body: image });
+  });
+  await page.goto('/pokemon/1');
+  const french = page.locator('.tcgdex__card').filter({ hasText: '· 1 · ES' });
+  const marketplace = page.locator('.tcgdex__card').filter({ hasText: '· 2 · ES' });
+  await expect(french.locator('img')).toHaveAttribute(
+    'src',
+    'https://assets.tcgdex.net/fr/sv/sv01/broken-1/high.webp',
+  );
+  await expect(page.getByLabel('Usar imágenes de TCGplayer', { exact: true })).toBeChecked();
+  await expect(marketplace.locator('img')).toHaveAttribute(
+    'src',
+    'https://tcgplayer-cdn.tcgplayer.com/product/684461_in_1000x1000.jpg',
+  );
+  await expect
+    .poll(() =>
+      marketplace.locator('img').evaluate((element) => (element as HTMLImageElement).naturalWidth),
+    )
+    .toBeGreaterThan(0);
+  await marketplace.click();
+  await expect(page.locator('.detail__image-button img')).toHaveAttribute(
+    'src',
+    'https://tcgplayer-cdn.tcgplayer.com/product/684461_in_1000x1000.jpg',
+  );
+});
+
+test('missing and failed artwork uses a neutral placeholder and selections survive reload', async ({
   page,
 }, testInfo) => {
   await page.route('https://api.tcgdex.net/v2/*/cards/fixture-1-*', (route) => {
@@ -85,29 +215,49 @@ test('missing and failed artwork uses the card back and selections survive reloa
   });
   await page.route('https://assets.tcgdex.net/**', (route) => route.abort());
   await page.goto('/pokemon/1');
-  const backs = page.locator('.tcgdex__card img[src="/cards/pokemon-card-back.jpg"]');
-  await expect(backs).toHaveCount(2);
+  const placeholders = page.locator('.tcgdex__card img[src="/cards/card-placeholder.png"]');
+  await expect(placeholders).toHaveCount(2);
   await expect
     .poll(() =>
-      backs.evaluateAll((images) =>
+      placeholders.evaluateAll((images) =>
         images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
       ),
     )
     .toBe(true);
-  await expect(backs.first()).toHaveAttribute('alt', /Reverso.*Bulbasaur/);
-  await page.locator('.tcgdex__card').first().click();
+  await expect(placeholders.first()).toHaveAttribute('alt', /Imagen no disponible de Bulbasaur/);
+  await expect(page.locator('.tcgdex__card').first()).toContainText('· 2 · ES');
+  await expect(page.locator('.tcgdex__card').last()).toContainText('· 1 · ES');
+  await page.locator('.tcgdex__card').filter({ hasText: '· 1 · ES' }).click();
   await page.getByRole('button', { name: 'La tengo', exact: true }).click();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Ya la tengo', exact: true })).toBeVisible();
   expect(
     await page.evaluate(
-      () => JSON.parse(localStorage.getItem('pokecollector.collection.v1')!).entries[0].card.image,
+      () => JSON.parse(localStorage.getItem('pokecollector.collection.v1')!).entries[0].card,
     ),
-  ).toBeNull();
-  await expect(backs).toHaveCount(2);
+  ).toMatchObject({ id: 'tcgdex:es:fixture-1-1', image: null });
+  await expect(placeholders).toHaveCount(2);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('card-back.png'), fullPage: true });
-  await page.route('**/cards/pokemon-card-back.jpg', (route) => route.abort());
+  await page.screenshot({ path: testInfo.outputPath('card-placeholder.png'), fullPage: true });
+  const marketplaceRequests: string[] = [];
+  await page.route('https://tcgplayer-cdn.tcgplayer.com/**', (route) => {
+    marketplaceRequests.push(route.request().url());
+    return route.abort();
+  });
+  await page.evaluate(() => {
+    const collection = JSON.parse(localStorage.getItem('pokecollector.collection.v1')!);
+    collection.entries[0].card.image =
+      'https://tcgplayer-cdn.tcgplayer.com/product/684461_in_1000x1000.jpg';
+    localStorage.setItem('pokecollector.collection.v1', JSON.stringify(collection));
+  });
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Ya la tengo', exact: true })).toBeVisible();
+  await expect(page.locator('.detail__image-button img')).toHaveAttribute(
+    'src',
+    '/cards/card-placeholder.png',
+  );
+  expect(marketplaceRequests.length).toBeGreaterThan(0);
+  await page.route('**/cards/card-placeholder.png', (route) => route.abort());
   await page.reload();
   await expect(page.locator('.tcgdex__card .card-art__fallback')).toHaveCount(2);
   await expect(page.locator('.tcgdex__card img')).toHaveCount(0);
@@ -284,6 +434,7 @@ test('JSON backup is validated, downloaded and restored without silent replaceme
 test('TCGdex supports pagination, cache, languages and persistent remote selections', async ({
   page,
 }, testInfo) => {
+  const pageSize = 48;
   const image = await readFile('e2e/card-fixture.png');
   const queries: string[] = [];
   await page.route('https://assets.tcgdex.net/**', (route) =>
@@ -296,10 +447,11 @@ test('TCGdex supports pagination, cache, languages and persistent remote selecti
       const currentPage = Number(url.searchParams.get('pagination:page'));
       queries.push(`${language}:${currentPage}`);
       expect(url.searchParams.get('dexId')).toBe('eq:1025');
+      expect(url.searchParams.get('pagination:itemsPerPage')).toBe(String(pageSize));
       const ids =
         currentPage === 1
-          ? Array.from({ length: 12 }, (_, index) => `fixture-${index + 1}`)
-          : ['fixture-13'];
+          ? Array.from({ length: pageSize }, (_, index) => `fixture-${index + 1}`)
+          : [`fixture-${pageSize + 1}`];
       await route.fulfill({ json: ids.map((id) => ({ id })) });
     } else {
       const id = url.pathname.split('/').at(-1);
@@ -317,16 +469,16 @@ test('TCGdex supports pagination, cache, languages and persistent remote selecti
     }
   });
   await page.goto('/pokemon/1025');
-  await expect(page.locator('.tcgdex__card')).toHaveCount(12);
+  await expect(page.locator('.tcgdex__card')).toHaveCount(pageSize);
   await expect(
     page.getByRole('heading', { name: 'Pecharunt', level: 2, exact: true }),
   ).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('pokecollector.collection.v1'))).toBeNull();
   await page.getByRole('button', { name: 'Cargar más', exact: true }).click();
-  await expect(page.locator('.tcgdex__card')).toHaveCount(13);
+  await expect(page.locator('.tcgdex__card')).toHaveCount(pageSize + 1);
   await expect(page.getByRole('button', { name: 'Cargar más', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Buscar en TCGdex', exact: true }).click();
-  await expect(page.locator('.tcgdex__card')).toHaveCount(12);
+  await expect(page.locator('.tcgdex__card')).toHaveCount(pageSize);
   expect(queries).toEqual(['es:1', 'es:2']);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
@@ -348,7 +500,7 @@ test('TCGdex supports pagination, cache, languages and persistent remote selecti
   );
   expect(savedId).toMatch(/^tcgdex:es:/);
   await page.getByLabel('Idioma de las cartas').selectOption('en');
-  await expect(page.locator('.tcgdex__card')).toHaveCount(12);
+  await expect(page.locator('.tcgdex__card')).toHaveCount(pageSize);
   await page.locator('.tcgdex__card').first().click();
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.getByRole('button', { name: 'La tengo', exact: true }).click();

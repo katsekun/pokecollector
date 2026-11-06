@@ -27,6 +27,16 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "LICENSE",
+                "input": ".",
+                "output": "/"
+              },
+              {
+                "glob": "THIRD_PARTY_NOTICES.md",
+                "input": ".",
+                "output": "/"
               }
             ],
             "styles": ["src/styles.scss"]

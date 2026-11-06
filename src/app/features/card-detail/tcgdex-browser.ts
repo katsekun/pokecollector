@@ -51,6 +51,15 @@ import { Icon } from '../../shared/icon';
           >TCGdex <app-icon name="arrow"
         /></a>
       </div>
+      <label class="tcgdex__verification"
+        ><input
+          type="checkbox"
+          [ngModel]="_allowTcgplayer()"
+          (ngModelChange)="_allowTcgplayer.set($event)"
+          title="Proveedor externo; permisos de uso de imágenes pendientes de confirmación"
+        />
+        Usar imágenes de TCGplayer</label
+      >
       @if (_error()) {
         <div class="notice notice--error" role="alert">
           <span>{{ _error() }}</span
@@ -99,7 +108,15 @@ import { Icon } from '../../shared/icon';
                 ><strong>{{ card.name }}</strong
                 ><small
                   >{{ card.set }} · {{ card.number }} · {{ card.language.toUpperCase() }}</small
-                ><span>{{
+                >
+                @if (card.imageProvider === 'tcgplayer') {
+                  <small>Imagen de referencia · TCGplayer</small>
+                } @else if (card.imageLanguage && card.imageLanguage !== card.language) {
+                  <small
+                    >Imagen de referencia · {{ card.imageLanguage.toUpperCase() }} · TCGdex</small
+                  >
+                }
+                <span>{{
                   card.requiresFormConfirmation
                     ? 'Forma sin verificar'
                     : card.illustration === 'standard'
@@ -282,6 +299,7 @@ export class TcgdexBrowser {
   public readonly firstCard = output<Card>();
   protected readonly languages = TCGDEX_LANGUAGES;
   protected readonly labels = ILLUSTRATION_LABELS;
+  protected readonly _allowTcgplayer = this.catalog._allowTcgplayer;
   protected readonly _language = signal<TcgdexLanguage>('es');
   protected readonly _loading = signal(false);
   protected readonly _searched = signal(false);
@@ -308,6 +326,7 @@ export class TcgdexBrowser {
       this._pokemon();
       this._forms();
       this._language();
+      this._allowTcgplayer();
       untracked(() => {
         this.reset();
         void this.load(true);
