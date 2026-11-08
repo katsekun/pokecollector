@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mapTcgdexCard, TcgdexCatalog, tcgdexIllustration } from './tcgdex-catalog';
+import {
+  mapTcgdexCard,
+  parseCardmarketPrice,
+  TcgdexCatalog,
+  tcgdexIllustration,
+} from './tcgdex-catalog';
 import { createBackup, EMPTY_COLLECTION, parseBackup, chooseCard } from './collection';
 
 const detail = {
@@ -17,6 +22,60 @@ afterEach(() => {
 });
 
 describe('TCGdex adapter', () => {
+  it('parses only valid positive EUR Cardmarket averages and trends, independently of other fields', () => {
+    expect(
+      parseCardmarketPrice({
+        pricing: {
+          cardmarket: {
+            unit: 'EUR',
+            updated: '2026-11-07T23:50:15.044Z',
+            avg: 67.42,
+            trend: 63.71,
+            avg1: 74,
+            avg7: null,
+            avg30: 'bad',
+            'trend-holo': 0,
+          },
+        },
+      }),
+    ).toEqual({
+      updated: '2026-11-07T23:50:15.044Z',
+      average: 67.42,
+      trend: 63.71,
+      average1: 74,
+      average7: null,
+      average30: null,
+    });
+    expect(parseCardmarketPrice({ pricing: { cardmarket: { unit: 'USD', avg: 2 } } })).toBeNull();
+    expect(
+      parseCardmarketPrice({ pricing: { cardmarket: { unit: 'EUR', avg: -2, trend: 0 } } }),
+    ).toBeNull();
+    expect(parseCardmarketPrice({ pricing: null })).toBeNull();
+    expect(
+      parseCardmarketPrice({
+        pricing: { cardmarket: { unit: 'EUR', updated: 'invalid', trend: 1 } },
+      })?.updated,
+    ).toBeNull();
+  });
+  it('reuses card details for market prices and rejects mismatched or unsafe card sources', async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      if (new URL(input).pathname.endsWith('/cards')) return Response.json([{ id: detail.id }]);
+      return Response.json({
+        ...detail,
+        pricing: { cardmarket: { unit: 'EUR', avg: 2, trend: 3 } },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const catalog = new TcgdexCatalog();
+    const card = (await catalog.search(1, 'en')).cards[0];
+    expect(await catalog.cardmarketPrice(card)).toMatchObject({ average: 2, trend: 3 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await catalog.cardmarketPrice({ ...card, number: '999' })).toBeNull();
+    expect(
+      await catalog.cardmarketPrice({ ...card, source: 'https://untrusted.example/data' }),
+    ).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
   it('limits simultaneous recovery detail requests to three', async () => {
     let active = 0;
     let maximum = 0;

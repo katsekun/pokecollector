@@ -123,6 +123,60 @@
             <output class="detail__feedback" aria-live="polite">{{ _feedback() }}</output>
           }
         </section>
+        <section class="detail__section" aria-labelledby="market-heading">
+          <div class="detail__section-heading">
+            <h3 id="market-heading">Referencia Cardmarket</h3>
+            <span>EUR · vía TCGdex</span>
+          </div>
+          <a
+            class="button button--outline"
+            [href]="cardmarketSearch(pokemon.name, card.number)"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Buscar en Cardmarket <app-icon name="arrow"
+          /></a>
+          @if (_marketStatus() === 'loading') {
+            <output class="detail__date">Consultando precios…</output>
+          } @else if (_marketStatus() === 'error') {
+            <output class="detail__date">No se pudieron consultar los precios.</output>
+            <button type="button" class="button button--outline" (click)="retryMarketPrice()">
+              Reintentar precios
+            </button>
+          } @else if (_marketPrice(); as price) {
+            <dl class="detail__metadata detail__market">
+              <div>
+                <dt>Tendencia</dt>
+                <dd>{{ formatMarketPrice(price.trend) }}</dd>
+              </div>
+              <div>
+                <dt>Precio medio</dt>
+                <dd>{{ formatMarketPrice(price.average) }}</dd>
+              </div>
+              <div>
+                <dt>Media 24 horas</dt>
+                <dd>{{ formatMarketPrice(price.average1) }}</dd>
+              </div>
+              <div>
+                <dt>Media 7 días</dt>
+                <dd>{{ formatMarketPrice(price.average7) }}</dd>
+              </div>
+              <div>
+                <dt>Media 30 días</dt>
+                <dd>{{ formatMarketPrice(price.average30) }}</dd>
+              </div>
+            </dl>
+            <p class="detail__date">
+              Idioma no especificado · acabado no verificado
+              @if (price.updated) {
+                · Actualizado {{ price.updated | date: 'dd/MM/yyyy HH:mm' }}
+              } @else {
+                · Fecha de actualización no disponible
+              }
+            </p>
+          } @else {
+            <output class="detail__date">Sin precio disponible para esta carta.</output>
+          }
+        </section>
         @if (_entry(); as entry) {
           @if (entry.needsFormReview) {
             <div class="notice notice--error" role="alert">

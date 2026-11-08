@@ -103,6 +103,9 @@
   font-size: 0.85rem;
   overflow-wrap: anywhere;
 }
+.detail__market {
+  margin-bottom: 0;
+}
 .detail__actions {
   display: flex;
   flex-wrap: wrap;
@@ -144,6 +147,7 @@
   width: 100%;
 }
 .detail__date {
+  display: block;
   font-size: 0.65rem;
   color: var(--muted);
   margin-top: 0.75rem;

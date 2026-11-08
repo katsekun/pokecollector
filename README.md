@@ -61,7 +61,15 @@ Si una URL de imagen existe pero falla al cargar, también se continúa con las 
 
 Consultar o previsualizar una carta no modifica la colección. Sus identificadores incluyen proveedor e idioma (`tcgdex:es:sv03.5-166`). Cada selección guarda el identificador de entrada y su número nacional. Recuperar una imagen solo cambia su presentación, no sobrescribe la carta elegida ni sus importes. Un error de red no borra cartas ni precios y permite reintentar. Las imágenes usan su URL de origen y necesitan conexión.
 
-Los precios continúan siendo manuales. Esta integración no convierte los datos de cotización de TCGdex en valoraciones de tu colección.
+## Referencia de precios
+
+La ficha muestra, cuando TCGdex los proporciona, la tendencia y el precio medio general de Cardmarket en EUR, además de las medias de 24 horas, 7 días y 30 días y la fecha de actualización del proveedor. La media de 24 horas no es necesariamente la última venta. TCGdex no desglosa estos valores por idioma y la correspondencia con el acabado o la edición concreta no está verificada; pueden no coincidir con una carta española, inglesa, japonesa o china en particular. Los valores ausentes, no válidos o cero se muestran como no disponibles, sin inventar una cotización.
+
+La consulta usa el detalle TCGdex de la carta seleccionada y su caché de diez minutos, no una API independiente de Cardmarket. No se asigna un precio de otra carta ni se calcula un total automático de colección. Las referencias son temporales y no modifican el precio pagado, la valoración manual, los respaldos ni Firestore. Una selección guardada se consulta de nuevo al abrir su ficha; si falla la petición, se puede reintentar sin afectar a la colección.
+
+«Buscar en Cardmarket» abre el buscador externo con el nombre del Pokémon y el número de la carta. Puede mostrar varias ediciones o no encontrar una equivalencia, especialmente para cartas asiáticas; comprueba el producto antes de usarlo. No es un enlace directo a una ficha: TCGdex proporciona un ID de producto, pero no la ruta de Cardmarket. Los filtros de idioma y país no se conservan al entrar en un producto desde los resultados, por lo que deben seleccionarse en Cardmarket.
+
+Documentación de TCGdex: [integración de mercados y ejemplos](https://tcgdex.dev/markets-prices), [campos de precios de carta](https://tcgdex.dev/reference/card#pricing) y [preguntas frecuentes sobre precios y correspondencias](https://tcgdex.dev/faq). El acceso gratuito no garantiza disponibilidad ni otorga permisos adicionales sobre datos de terceros; revisa las condiciones de Cardmarket y TCGdex antes de una publicación pública.
 
 ## Guardado y respaldos
 
@@ -74,8 +82,8 @@ La integración Firebase está configurada para el proyecto `pokecollector-8c894
 1. En Firebase Authentication, habilita Google y autoriza `localhost`, `127.0.0.1` y `katsekun.github.io`.
 2. Crea Firestore en Standard, modo producción. Mantén inicialmente el acceso denegado.
 3. Ejecuta la aplicación y pulsa «Entrar con Google». Inicia sesión con tu cuenta personal. La colección local permanece disponible; Firestore mostrará un error de permiso mientras el UID de propietario siga sin configurar.
-4. Antes de subir datos, aparece una confirmación para fusionar la colección local con la remota. Puedes cancelarla y seguir en local. Tras aceptar, copia el UID que muestra la aplicación. En `firestore.rules`, reemplaza `REPLACE_WITH_YOUR_FIREBASE_UID` por ese valor. Publica el contenido completo del archivo en Firebase Console → Firestore Database → Rules → Publish.
-5. Vuelve a la aplicación y pulsa «Reintentar nube». La primera sincronización fusiona entradas y álbumes; conflictos de una misma forma conservan la selección local. Después, los cambios se guardan primero en local y se suben automáticamente.
+4. Comprueba que el UID mostrado al iniciar sesión coincide con el propietario configurado en `firestore.rules`. Publica el contenido completo de ese archivo en Firebase Console → Firestore Database → Rules → Publish. La regla local no se aplica automáticamente a Firebase.
+5. Vuelve a la aplicación y pulsa «Reintentar nube». Si hay datos locales, confirma la fusión antes de subirlos; puedes cancelarla y seguir en local. En una misma forma se conserva la selección local y se combinan los álbumes. Después, los cambios se guardan primero en local y se suben automáticamente.
 
 Las reglas deniegan el acceso salvo cuando el UID autenticado coincide tanto con el UID de la ruta como con el propietario configurado. No cambies la regla por una condición genérica de «usuario autenticado». Prueba desde una segunda cuenta que no pueda leer ni escribir. El login de Google por sí solo no da acceso a Firestore.
 
@@ -157,4 +165,4 @@ Las ilustraciones, nombres y marcas pertenecen a sus titulares. Proyecto persona
 
 ## Pendiente
 
-Login y sincronización Firebase están implementados, pero la nube seguirá bloqueada hasta sustituir el UID de ejemplo en `firestore.rules` y publicar esas reglas en Firebase Console. Faltan pruebas contra Firebase Emulator Suite y completar la publicación en GitHub Pages. Precios automáticos, PWA, CSV y múltiples cartas/copias por forma quedan fuera de esta versión. Los filtros de idioma, expansión e ilustración de la Pokédex actúan sobre tus cartas elegidas, no sobre una indexación completa del catálogo TCGdex.
+Login y sincronización Firebase están implementados, pero la nube seguirá bloqueada hasta publicar `firestore.rules` en Firebase Console. Faltan pruebas contra Firebase Emulator Suite y completar la publicación en GitHub Pages. Precios automáticos, PWA, CSV y múltiples cartas/copias por forma quedan fuera de esta versión. Los filtros de idioma, expansión e ilustración de la Pokédex actúan sobre tus cartas elegidas, no sobre una indexación completa del catálogo TCGdex.

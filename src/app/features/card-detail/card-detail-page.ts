@@ -9,6 +9,7 @@ import { CollectionStore } from '../../core/collection-store';
 import { CardArt } from '../../shared/card-art';
 import { Icon } from '../../shared/icon';
 import { TcgdexBrowser } from './tcgdex-browser';
+import { CardmarketPrice, TcgdexCatalog } from '../../core/tcgdex-catalog';
 import { nationalNumber } from '../../core/pokemon-forms';
 
 @Component({
@@ -20,6 +21,8 @@ import { nationalNumber } from '../../core/pokemon-forms';
 export class CardDetailPage {
   protected readonly store = inject(CollectionStore);
   private readonly route = inject(ActivatedRoute);
+  private readonly catalog = inject(TcgdexCatalog);
+  private marketRequestId = 0;
   private readonly _params = toSignal(this.route.paramMap, {
     initialValue: this.route.snapshot.paramMap,
   });
@@ -49,15 +52,60 @@ export class CardDetailPage {
   protected readonly _paid = signal('');
   protected readonly _value = signal('');
   protected readonly _feedback = signal('');
+  protected readonly _marketPrice = signal<CardmarketPrice | null>(null);
+  protected readonly _marketStatus = signal<'loading' | 'ready' | 'error'>('loading');
   protected readonly illustrationLabels = ILLUSTRATION_LABELS;
   protected readonly regions = REGIONS;
 
   public constructor() {
+    effect((onCleanup) => {
+      const card = this._preview();
+      const requestId = ++this.marketRequestId;
+      this._marketPrice.set(null);
+      this._marketStatus.set('loading');
+      if (card) void this.loadMarketPrice(card, requestId);
+      onCleanup(() => {
+        this.marketRequestId += 1;
+      });
+    });
     effect(() => {
       const entry = this._entry();
       this._paid.set(entry?.paidCents == null ? '' : (entry.paidCents / 100).toFixed(2));
       this._value.set(entry?.valueCents == null ? '' : (entry.valueCents / 100).toFixed(2));
     });
+  }
+
+  protected formatMarketPrice(amount: number | null): string {
+    return amount === null
+      ? 'No disponible'
+      : new Intl.NumberFormat('es-ES', {
+          style: 'currency',
+          currency: 'EUR',
+        }).format(amount);
+  }
+
+  protected retryMarketPrice(): void {
+    const card = this._preview();
+    if (card) void this.loadMarketPrice(card, ++this.marketRequestId);
+  }
+
+  protected cardmarketSearch(name: string, number: string): string {
+    const url = new URL('https://www.cardmarket.com/es/Pokemon/Products/Search');
+    url.searchParams.set('searchString', `${name} ${number}`);
+    return url.href;
+  }
+
+  private async loadMarketPrice(card: Card, requestId: number): Promise<void> {
+    this._marketPrice.set(null);
+    this._marketStatus.set('loading');
+    try {
+      const price = await this.catalog.cardmarketPrice(card);
+      if (requestId !== this.marketRequestId) return;
+      this._marketPrice.set(price);
+      this._marketStatus.set('ready');
+    } catch {
+      if (requestId === this.marketRequestId) this._marketStatus.set('error');
+    }
   }
 
   protected showInitialCard(card: Card): void {

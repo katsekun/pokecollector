@@ -54,6 +54,48 @@ const detailSchema = object({
     .catch(undefined),
 });
 
+const cardmarketSchema = object({
+  unit: string(),
+  updated: string().nullish(),
+  avg: number().nullish().catch(null),
+  trend: number().nullish().catch(null),
+  avg1: number().nullish().catch(null),
+  avg7: number().nullish().catch(null),
+  avg30: number().nullish().catch(null),
+});
+
+export interface CardmarketPrice {
+  readonly updated: string | null;
+  readonly average: number | null;
+  readonly trend: number | null;
+  readonly average1: number | null;
+  readonly average7: number | null;
+  readonly average30: number | null;
+}
+
+export function parseCardmarketPrice(raw: unknown): CardmarketPrice | null {
+  const parsed = object({
+    pricing: object({ cardmarket: cardmarketSchema.nullish() }).nullish(),
+  }).safeParse(raw);
+  const price = parsed.success ? parsed.data.pricing?.cardmarket : null;
+  if (price?.unit !== 'EUR') return null;
+  const amount = (value: number | null | undefined): number | null =>
+    value != null && Number.isFinite(value) && value > 0 && value <= 1_000_000 ? value : null;
+  const result = {
+    updated: price.updated && Number.isFinite(Date.parse(price.updated)) ? price.updated : null,
+    average: amount(price.avg),
+    trend: amount(price.trend),
+    average1: amount(price.avg1),
+    average7: amount(price.avg7),
+    average30: amount(price.avg30),
+  };
+  return [result.average, result.trend, result.average1, result.average7, result.average30].some(
+    (value) => value !== null,
+  )
+    ? result
+    : null;
+}
+
 export interface TcgdexPage {
   readonly cards: readonly Card[];
   readonly hasMore: boolean;
@@ -129,6 +171,27 @@ export class TcgdexCatalog {
   private readonly recoveryCache = new Map<string, { expires: number; result: Promise<Card> }>();
   private activeDetailRequests = 0;
   private readonly detailQueue: (() => void)[] = [];
+
+  public async cardmarketPrice(card: Card): Promise<CardmarketPrice | null> {
+    const language = TCGDEX_LANGUAGES.find((candidate) => candidate.id === card.language)?.id;
+    if (!language || !URL.canParse(card.source)) return null;
+    const source = new URL(card.source);
+    if (
+      source.origin !== 'https://api.tcgdex.net' ||
+      !source.pathname.startsWith(`/v2/${language}/cards/`)
+    )
+      return null;
+    const raw = await this.readDetail(source.href);
+    const detail = detailSchema.parse(raw);
+    const mapped = mapTcgdexCard(detail, card.nationalId ?? card.speciesId, language);
+    if (
+      mapped?.id !== card.id ||
+      String(detail.localId) !== card.number ||
+      detail.set.name !== card.set
+    )
+      return null;
+    return parseCardmarketPrice(raw);
+  }
 
   public recoverImage(card: Card, failedImages: readonly string[]): Promise<Card> {
     const allowTcgplayer = this._allowTcgplayer();

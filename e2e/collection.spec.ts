@@ -66,6 +66,128 @@ test('complete national snapshot without a local card catalogue', async ({ reque
   expect(sampleRequests).toEqual([]);
 });
 
+test('Cardmarket reference follows the selected card without changing manual valuation', async ({
+  page,
+}, testInfo) => {
+  await page.route('https://api.tcgdex.net/v2/*/cards/fixture-1-*', (route) => {
+    const url = new URL(route.request().url());
+    const id = url.pathname.split('/').at(-1)!;
+    const number = id.split('-').at(-1)!;
+    return route.fulfill({
+      json: {
+        id,
+        name: 'Bulbasaur',
+        localId: number,
+        dexId: [1],
+        rarity: 'Promo',
+        image: 'https://assets.tcgdex.net/es/sv/sv01/1',
+        set: { id: 'sv01', name: 'Scarlet & Violet' },
+        pricing:
+          number === '1'
+            ? {
+                cardmarket: {
+                  unit: 'EUR',
+                  updated: '2026-11-07T23:50:15.044Z',
+                  trend: 63.71,
+                  avg: 67.42,
+                  avg1: 74,
+                  avg7: 69.78,
+                  avg30: 66.71,
+                },
+              }
+            : null,
+      },
+    });
+  });
+  await page.goto('/pokemon/1');
+  const market = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Referencia Cardmarket' }) });
+  const search = market.getByRole('link', { name: 'Buscar en Cardmarket' });
+  const searchUrl = new URL((await search.getAttribute('href'))!);
+  expect(searchUrl.origin).toBe('https://www.cardmarket.com');
+  expect(searchUrl.pathname).toBe('/es/Pokemon/Products/Search');
+  expect(searchUrl.searchParams.get('searchString')).toBe('Bulbasaur 1');
+  await expect(search).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(market).toContainText('63,71');
+  await expect(market).toContainText('67,42');
+  await expect(market).toContainText('69,78');
+  await expect(market).toContainText('Idioma no especificado');
+  await expect(market).toContainText('acabado no verificado');
+  await page.getByRole('button', { name: 'La tengo', exact: true }).click();
+  await page.getByLabel('Valoración manual (€)', { exact: true }).fill('12,34');
+  await page.getByRole('button', { name: 'Guardar importes', exact: true }).click();
+  await page.reload();
+  await expect(market).toContainText('63,71');
+  await expect(page.getByLabel('Valoración manual (€)', { exact: true })).toHaveValue('12.34');
+  await page.screenshot({ path: testInfo.outputPath('cardmarket.png'), fullPage: true });
+  await page.locator('.tcgdex__card').filter({ hasText: '· 2 · ES' }).click();
+  await expect(market).toContainText('Sin precio disponible para esta carta.');
+  await expect(market).not.toContainText('63,71');
+  await expect(page.getByLabel('Valoración manual (€)', { exact: true })).toHaveValue('12.34');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('saved card market prices recover from a temporary provider failure', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'pokecollector.collection.v1',
+      JSON.stringify({
+        schemaVersion: 2,
+        exportedAt: '2026-11-08T00:00:00.000Z',
+        currency: 'EUR',
+        entries: [
+          {
+            speciesId: 1,
+            status: 'owned',
+            paidCents: 500,
+            valueCents: 1234,
+            valuedAt: '2026-11-08T00:00:00.000Z',
+            card: {
+              id: 'tcgdex:es:saved-1',
+              speciesId: 1,
+              name: 'Bulbasaur',
+              language: 'es',
+              set: 'Promo',
+              number: '1',
+              rarity: 'Promo',
+              illustration: 'standard',
+              image: null,
+              source: 'https://api.tcgdex.net/v2/es/cards/saved-1',
+            },
+          },
+        ],
+        albums: [],
+      }),
+    );
+  });
+  let attempts = 0;
+  await page.route('https://api.tcgdex.net/v2/es/cards/saved-1', (route) => {
+    attempts += 1;
+    if (attempts === 1) return route.fulfill({ status: 503 });
+    return route.fulfill({
+      json: {
+        id: 'saved-1',
+        name: 'Bulbasaur',
+        localId: '1',
+        dexId: [1],
+        rarity: 'Promo',
+        image: 'https://assets.tcgdex.net/es/sv/sv01/1',
+        set: { id: 'sv01', name: 'Promo' },
+        pricing: { cardmarket: { unit: 'EUR', trend: 3.45 } },
+      },
+    });
+  });
+  await page.goto('/pokemon/1');
+  const market = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Referencia Cardmarket' }) });
+  await expect(market).toContainText('No se pudieron consultar los precios.');
+  await market.getByRole('button', { name: 'Reintentar precios', exact: true }).click();
+  await expect(market).toContainText('3,45');
+  await expect(page.getByLabel('Valoración manual (€)', { exact: true })).toHaveValue('12.34');
+});
+
 test('reference artwork prioritizes TCGdex languages and enables TCGplayer by default', async ({
   page,
 }, testInfo) => {

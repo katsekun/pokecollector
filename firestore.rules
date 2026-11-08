@@ -5,7 +5,7 @@ service cloud.firestore {
     function isOwner(uid) {
       return request.auth != null
         && request.auth.uid == uid
-        && request.auth.uid == 'REPLACE_WITH_YOUR_FIREBASE_UID';
+        && request.auth.uid == 'TgkbqxWePHSWYHZijMXoLSl66j83';
     }
 
     match /users/{uid}/{document=**} {
