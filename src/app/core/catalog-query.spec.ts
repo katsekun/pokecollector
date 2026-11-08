@@ -54,6 +54,14 @@ describe('Pokédex filtering', () => {
       queryCatalog(species, [card], [entry], { ...DEFAULT_FILTERS, status: 'missing' }),
     ).toHaveLength(3);
   });
+  it('filters wanted and owned entries individually or together without including catalog-only cards', () => {
+    const owned = { ...entry, speciesId: 25, card: { ...card, id: 'pikachu', speciesId: 25, name: 'Pikachu' }, status: 'owned' as const };
+    const catalogOnly = { ...card, id: 'chikorita', speciesId: 152, name: 'Chikorita' };
+    expect(queryCatalog(species, [catalogOnly], [entry, owned], { ...DEFAULT_FILTERS, status: 'wanted' })).toEqual([species[0]]);
+    expect(queryCatalog(species, [catalogOnly], [entry, owned], { ...DEFAULT_FILTERS, status: 'owned' })).toEqual([species[1]]);
+    expect(queryCatalog(species, [catalogOnly], [entry, owned], { ...DEFAULT_FILTERS, status: 'selected' })).toEqual([species[0], species[1]]);
+    expect(queryCatalog(species, [catalogOnly], [entry, owned], DEFAULT_FILTERS)).toEqual(species);
+  });
   it('matches illustration, language and set on the same card', () => {
     const other = { ...card, id: 'b', language: 'ja', illustration: 'standard' as const };
     expect(

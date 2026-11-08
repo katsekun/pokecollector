@@ -16,13 +16,13 @@ export class FirebaseCollectionRepository {
   private readonly snapshots = new Map<string, CollectionData>();
 
   public async load(uid: string): Promise<CollectionData> {
-    const [{ collection, getDocs }, firestore] = await Promise.all([
+    const [{ collection, getDocsFromServer }, firestore] = await Promise.all([
       import('firebase/firestore'),
       getFirebaseFirestore(),
     ]);
     const [entriesSnapshot, albumsSnapshot] = await Promise.all([
-      getDocs(collection(firestore, 'users', uid, 'entries')),
-      getDocs(collection(firestore, 'users', uid, 'albums')),
+      getDocsFromServer(collection(firestore, 'users', uid, 'entries')),
+      getDocsFromServer(collection(firestore, 'users', uid, 'albums')),
     ]);
     const entries = entriesSnapshot.docs.map((snapshot) => snapshot.data() as CollectionEntry);
     const albums = albumsSnapshot.docs.map((snapshot) => snapshot.data() as Album);

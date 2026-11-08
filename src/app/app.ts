@@ -70,32 +70,15 @@ import { Icon } from './shared/icon';
           >
             <app-icon [name]="_dark() ? 'sun' : 'moon'" />
           </button>
+          <a
+            routerLink="/configuracion"
+            class="icon-button"
+            title="Configuración"
+            aria-label="Configuración"
+          >
+            <app-icon name="settings" />
+          </a>
           <span class="topbar__divider"></span>
-          <button
-            type="button"
-            class="button button--quiet"
-            aria-label="Importar"
-            (click)="fileInput.click()"
-            [disabled]="store._isLoading() || !!store._catalogError()"
-          >
-            <app-icon name="upload" /><span>Importar</span>
-          </button>
-          <button
-            type="button"
-            class="button button--outline"
-            aria-label="Exportar"
-            (click)="exportBackup()"
-            [disabled]="store._isLoading() || store._storageBlocked()"
-          >
-            <app-icon name="download" /><span>Exportar</span>
-          </button>
-          <input
-            #fileInput
-            type="file"
-            accept=".json,application/json"
-            hidden
-            (change)="importBackup($event)"
-          />
           @if (auth._loading()) {
             <button type="button" class="button button--outline" disabled>Conectando…</button>
           } @else if (auth._user(); as user) {
@@ -163,6 +146,9 @@ import { Icon } from './shared/icon';
               }
               @case ('saving') {
                 Guardando cambios en Firebase…
+              }
+              @case ('paused') {
+                Sincronización automática desactivada.
               }
               @case ('synced') {
                 Colección sincronizada con Firebase.
@@ -252,42 +238,6 @@ export class App implements OnInit {
       localStorage.setItem('pokecollector.theme', theme);
     } catch {
       this._feedback.set('El tema se aplicará solo en esta sesión.');
-    }
-  }
-
-  protected exportBackup(): void {
-    const url = URL.createObjectURL(
-      new Blob([this.store.exportJson()], { type: 'application/json' }),
-    );
-    const anchor = this.document.createElement('a');
-    anchor.href = url;
-    anchor.download = `pokecollector-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    this._feedback.set('Respaldo exportado.');
-  }
-
-  protected async importBackup(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
-    try {
-      if (file.size > 5_000_000) throw new Error('El archivo supera el límite de 5 MB.');
-      const text = await file.text();
-      const backup = this.store.inspectBackup(text);
-      if (
-        !window.confirm(
-          `¿Restaurar ${backup.entries.length} cartas y ${backup.albums.length} álbumes? Se sustituirá toda la colección actual. Exporta primero un respaldo si quieres conservarla.`,
-        )
-      )
-        return;
-      if (this.store.restore(text)) this._feedback.set('Colección restaurada.');
-    } catch (error) {
-      let message = 'No se pudo leer el archivo.';
-      if (error instanceof SyntaxError) message = 'El archivo no contiene un JSON válido.';
-      else if (error instanceof Error) message = error.message;
-      this._feedback.set(message);
     }
   }
 }

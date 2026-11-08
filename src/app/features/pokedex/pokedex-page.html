@@ -140,6 +140,7 @@
           <option value="all">Todos los estados</option>
           <option value="owned">En colección</option>
           <option value="wanted">Deseos</option>
+          <option value="selected">Deseos y colección</option>
           <option value="missing">Me faltan</option>
         </select></label
       >
@@ -215,14 +216,19 @@
     </div>
   }
   <div class="catalog__options">
-    <label class="catalog__checkbox"
-      ><input
-        type="checkbox"
-        [ngModel]="view._filters().availableOnly"
-        (ngModelChange)="setFilter('availableOnly', $event)"
-      />
-      Con carta elegida</label
-    ><label class="catalog__sort"
+    @if (!isWishlist) {
+      <label class="catalog__checkbox"
+        ><input type="checkbox" [checked]="hasStatusFilter('wanted')"
+          (change)="setStatusCheckbox('wanted', $any($event.target).checked)" />
+        La quiero</label
+      >
+      <label class="catalog__checkbox"
+        ><input type="checkbox" [checked]="hasStatusFilter('owned')"
+          (change)="setStatusCheckbox('owned', $any($event.target).checked)" />
+        La tengo</label
+      >
+    }
+    <label class="catalog__sort"
       ><span>Ordenar:</span
       ><select
         aria-label="Ordenar cartas"
