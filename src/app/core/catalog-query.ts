@@ -4,7 +4,7 @@ import { nationalNumber } from './pokemon-forms';
 export interface CatalogFilters {
   readonly query: string;
   readonly generation: number;
-  readonly status: 'all' | 'owned' | 'wanted' | 'missing';
+  readonly status: 'all' | 'owned' | 'wanted' | 'selected' | 'missing';
   readonly illustration: string;
   readonly language: string;
   readonly set: string;
@@ -89,6 +89,7 @@ export function queryCatalog(
     if (filters.generation && pokemon.generation !== filters.generation) return false;
     if (!matchesFormType(pokemon, filters.formType)) return false;
     if (filters.status === 'missing' && entry?.status === 'owned') return false;
+    if (filters.status === 'selected' && !entry) return false;
     if (
       (filters.status === 'owned' || filters.status === 'wanted') &&
       entry?.status !== filters.status

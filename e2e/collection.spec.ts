@@ -38,6 +38,95 @@ test.beforeEach(async ({ page }) => {
 });
 test.afterEach(() => expect(pageErrors).toEqual([]));
 
+test('wanted and owned checkboxes filter independently and match the status menu', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const makeEntry = (speciesId: number, name: string, status: 'wanted' | 'owned') => ({
+      speciesId,
+      status,
+      paidCents: null,
+      valueCents: null,
+      valuedAt: null,
+      card: {
+        id: `tcgdex:es:fixture-${speciesId}-1`,
+        speciesId,
+        name,
+        language: 'es',
+        set: 'Promo',
+        number: '1',
+        rarity: 'Promo',
+        illustration: 'standard',
+        image: null,
+        source: `https://api.tcgdex.net/v2/es/cards/fixture-${speciesId}-1`,
+      },
+    });
+    localStorage.setItem(
+      'pokecollector.collection.v1',
+      JSON.stringify({
+        schemaVersion: 2,
+        exportedAt: '2026-11-08T00:00:00.000Z',
+        currency: 'EUR',
+        entries: [makeEntry(1, 'Bulbasaur', 'wanted'), makeEntry(25, 'Pikachu', 'owned')],
+        albums: [],
+      }),
+    );
+  });
+  await page.goto('/');
+  const wanted = page.getByRole('checkbox', { name: 'La quiero' });
+  const owned = page.getByRole('checkbox', { name: 'La tengo' });
+  const status = page.getByRole('combobox', { name: 'Estado' });
+  await expect(wanted).not.toBeChecked();
+  await expect(owned).not.toBeChecked();
+  await wanted.check();
+  await expect(status).toHaveValue('wanted');
+  await expect(page.locator('.specimen')).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'Ver cartas de Bulbasaur' })).toBeVisible();
+  await owned.check();
+  await expect(status).toHaveValue('selected');
+  await expect(page.locator('.specimen')).toHaveCount(2);
+  await wanted.uncheck();
+  await expect(status).toHaveValue('owned');
+  await expect(page.getByRole('link', { name: 'Ver cartas de Pikachu' })).toBeVisible();
+  await expect(page.locator('.specimen')).toHaveCount(1);
+  await owned.uncheck();
+  await expect(status).toHaveValue('all');
+  await expect(page.locator('.specimen')).toHaveCount(24);
+  await status.selectOption('selected');
+  await expect(wanted).toBeChecked();
+  await expect(owned).toBeChecked();
+  await status.selectOption('missing');
+  await expect(wanted).not.toBeChecked();
+  await expect(owned).not.toBeChecked();
+  await expect(page.getByRole('link', { name: 'Ver cartas de Bulbasaur' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Ver cartas de Pikachu' })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('sync settings remain available without signing in and persist per browser', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Configuración', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Configuración', level: 1 })).toBeVisible();
+  const automatic = page.getByRole('checkbox', { name: 'Sincronización automática' });
+  const synchronize = page.getByRole('button', { name: 'Sincronizar ahora' });
+  await expect(automatic).toBeChecked();
+  await expect(synchronize).toBeDisabled();
+  await automatic.uncheck();
+  await page.reload();
+  await expect(automatic).not.toBeChecked();
+  await expect(synchronize).toBeDisabled();
+  await expect(page.getByText('Sin sesión · Solo en este navegador')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('sync-settings.png'), fullPage: true });
+  await automatic.check();
+  await page.reload();
+  await expect(automatic).toBeChecked();
+  await page.getByRole('link', { name: 'Pokédex' }).click();
+  await expect(page.getByRole('heading', { name: 'Mi Pokédex', exact: true })).toBeVisible();
+});
+
 test('complete national snapshot without a local card catalogue', async ({ request, page }) => {
   const species = await (await request.get('/data/pokemon-species.json')).json();
   expect(species).toHaveLength(1545);
@@ -392,7 +481,7 @@ test('light and dark Pokédex renders and loads TCGdex only when a Pokémon is o
   page.on('request', (request) => {
     if (
       ['fetch', 'xhr'].includes(request.resourceType()) &&
-      new URL(request.url()).hostname !== '127.0.0.1'
+      new URL(request.url()).origin !== new URL(page.url()).origin
     )
       remoteDataRequests.push(request.url());
   });
@@ -507,6 +596,7 @@ test('JSON backup is validated, downloaded and restored without silent replaceme
 }) => {
   await page.goto('/pokemon/1');
   await page.getByRole('button', { name: 'La tengo', exact: true }).click();
+  await page.getByRole('link', { name: 'Configuración', exact: true }).click();
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Exportar', exact: true }).click();
   const download = await downloadPromise;
@@ -525,6 +615,7 @@ test('JSON backup is validated, downloaded and restored without silent replaceme
       () => JSON.parse(localStorage.getItem('pokecollector.collection.v1')!).entries.length,
     ),
   ).toBe(1);
+  await page.goto('/pokemon/1');
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Eliminar selección', exact: true }).click();
   expect(
@@ -532,6 +623,7 @@ test('JSON backup is validated, downloaded and restored without silent replaceme
       () => JSON.parse(localStorage.getItem('pokecollector.collection.v1')!).entries.length,
     ),
   ).toBe(0);
+  await page.getByRole('link', { name: 'Configuración', exact: true }).click();
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.locator('input[type="file"]').setInputFiles({
     name: 'backup.json',
@@ -550,6 +642,7 @@ test('JSON backup is validated, downloaded and restored without silent replaceme
     buffer: Buffer.from(backup),
   });
   await expect(page.getByText('Colección restaurada.', { exact: true })).toBeVisible();
+  await page.goto('/pokemon/1');
   await expect(page.getByRole('button', { name: 'Ya la tengo', exact: true })).toBeVisible();
 });
 

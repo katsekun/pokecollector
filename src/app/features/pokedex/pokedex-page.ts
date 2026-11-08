@@ -110,6 +110,21 @@ export class PokedexPage {
     this.view._page.set(1);
   }
 
+  protected hasStatusFilter(status: 'wanted' | 'owned'): boolean {
+    const current = this.view._filters().status;
+    return current === status || current === 'selected';
+  }
+
+  protected setStatusCheckbox(status: 'wanted' | 'owned', checked: boolean): void {
+    const wanted = status === 'wanted' ? checked : this.hasStatusFilter('wanted');
+    const owned = status === 'owned' ? checked : this.hasStatusFilter('owned');
+    let next: CatalogFilters['status'] = 'all';
+    if (wanted && owned) next = 'selected';
+    else if (wanted) next = 'wanted';
+    else if (owned) next = 'owned';
+    this.setFilter('status', next);
+  }
+
   protected resetFilters(): void {
     this.view._filters.set(DEFAULT_FILTERS);
     this.view._page.set(1);

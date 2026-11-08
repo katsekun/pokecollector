@@ -1,0 +1,60 @@
+.settings {
+  max-width: 46rem;
+  border-top: 1px solid var(--line);
+}
+.settings__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings__heading app-icon {
+  color: var(--primary);
+}
+.settings__heading h2 {
+  font-size: 1rem;
+}
+.settings__row {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings__toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.85rem;
+}
+.settings__row--action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.settings__status {
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.settings__status small {
+  display: block;
+  margin-top: 0.35rem;
+}
+.settings__backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.settings__feedback {
+  display: block;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.settings__warning {
+  display: block;
+  margin-top: 0.6rem;
+  color: var(--danger);
+  font-size: 0.75rem;
+}
