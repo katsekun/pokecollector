@@ -214,49 +214,72 @@ import { Icon } from '../../shared/icon';
     }
     .tcgdex__results {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-      gap: 0.5rem;
-      max-height: 23rem;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+      gap: 1.1rem;
+      max-height: 30rem;
       overflow-y: auto;
-      padding: 0.2rem;
+      padding: 0.5rem;
     }
     .tcgdex__card {
-      display: flex;
+      display: grid;
+      grid-template-columns: 9.5rem minmax(0, 1fr) auto;
       align-items: center;
-      gap: 0.65rem;
+      gap: 1rem;
       border: 1px solid var(--line);
-      border-radius: 0.375rem;
-      background: var(--surface);
-      padding: 0.65rem;
+      border-radius: 1rem;
+      background: linear-gradient(180deg, var(--surface) 0%, var(--surface-alt) 100%);
+      padding: 0.9rem;
       text-align: left;
       min-width: 0;
+      min-height: 11rem;
+      box-shadow: 0 0.35rem 1rem rgb(0 0 0 / 0.08);
     }
     .tcgdex__card:hover,
     .tcgdex__card--active {
       border-color: var(--primary);
-      background: var(--surface-alt);
+      background: linear-gradient(180deg, var(--surface) 0%, color-mix(in srgb, var(--primary) 12%, var(--surface-alt)) 100%);
+      box-shadow: 0 0.6rem 1.4rem rgb(0 0 0 / 0.12);
     }
     .tcgdex__image {
-      width: 2.8rem;
+      width: 9.5rem;
+      min-width: 9.5rem;
+      aspect-ratio: 734 / 1024;
       flex-shrink: 0;
+      border-radius: 0.7rem;
+      overflow: hidden;
+      background: var(--surface-alt);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 0.45rem 1rem rgb(0 0 0 / 0.12);
+    }
+    .tcgdex__image app-card-art {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
     .tcgdex__metadata {
       display: grid;
-      gap: 0.2rem;
+      gap: 0.36rem;
       min-width: 0;
       overflow-wrap: anywhere;
+      flex: 1;
     }
     .tcgdex__metadata strong {
-      font-size: 0.8rem;
-      font-weight: 500;
+      font-size: 1.06rem;
+      font-weight: 700;
+      line-height: 1.25;
     }
     .tcgdex__metadata small {
-      font-size: 0.65rem;
+      font-size: 0.75rem;
       color: var(--muted);
+      line-height: 1.5;
     }
     .tcgdex__metadata > span {
-      font-size: 0.6rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.03em;
       color: var(--primary);
+      margin-top: 0.18rem;
+      font-weight: 600;
     }
     .tcgdex__card > app-icon {
       margin-left: auto;

@@ -256,13 +256,13 @@
 }
 .specimen-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1.5rem 1rem;
 }
 .specimen {
   min-width: 0;
   display: block;
-  padding: 0.5rem 0.5rem 0.7rem;
+  padding: 0.6rem 0.6rem 0.8rem;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 0.5rem;
@@ -277,6 +277,15 @@
 }
 .specimen__image {
   position: relative;
+  overflow: hidden;
+  border-radius: 0.4rem;
+  background: var(--surface-alt);
+}
+.specimen__image app-card-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.4rem;
 }
 .specimen__corner {
   position: absolute;
@@ -316,14 +325,14 @@
 }
 .specimen h3 {
   margin: 0 0.2rem;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
 .specimen p {
   margin: 0.2rem 0.2rem 0.6rem;
   color: var(--muted);
-  font-size: 0.6rem;
-  min-height: 1.8rem;
+  font-size: 0.65rem;
+  min-height: 2rem;
   line-height: 1.5;
 }
 .specimen__status {
@@ -344,7 +353,7 @@
 }
 @media (min-width: 1700px) {
   .specimen-grid {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 @media (max-width: 1300px) {
@@ -362,6 +371,9 @@
   .collection-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.5rem 0;
+  }
+  .specimen-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .collection-stats__item:nth-child(2) {
     border: 0;
@@ -381,9 +393,6 @@
   }
   .catalog__toolbar select {
     width: 100%;
-  }
-  .specimen-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 @media (max-width: 760px) {
