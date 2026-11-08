@@ -126,15 +126,14 @@
         <section class="detail__section" aria-labelledby="market-heading">
           <div class="detail__section-heading">
             <h3 id="market-heading">Referencia Cardmarket</h3>
-            <span>EUR · vía TCGdex</span>
+            <a
+              class="button button--outline"
+              [href]="cardmarketSearch(pokemon.name, card.number)"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Buscar en Cardmarket <app-icon name="arrow"
+            /></a>
           </div>
-          <a
-            class="button button--outline"
-            [href]="cardmarketSearch(pokemon.name, card.number)"
-            target="_blank"
-            rel="noopener noreferrer"
-            >Buscar en Cardmarket <app-icon name="arrow"
-          /></a>
           @if (_marketStatus() === 'loading') {
             <output class="detail__date">Consultando precios…</output>
           } @else if (_marketStatus() === 'error') {
