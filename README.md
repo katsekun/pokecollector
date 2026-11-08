@@ -91,6 +91,12 @@ La integración Firebase está configurada para el proyecto `pokecollector-8c894
 
 Las reglas deniegan el acceso salvo cuando el UID autenticado coincide tanto con el UID de la ruta como con el propietario configurado. No cambies la regla por una condición genérica de «usuario autenticado». Prueba desde una segunda cuenta que no pueda leer ni escribir. El login de Google por sí solo no da acceso a Firestore.
 
+## Publicar en GitHub Pages
+
+El workflow `.github/workflows/deploy-pages.yml` publica automáticamente al hacer push a `main` o al ejecutarlo manualmente desde GitHub Actions. En GitHub, abre Settings → Pages y selecciona GitHub Actions como origen. La URL del proyecto es `https://katsekun.github.io/pokecollector/`; el workflow compila con su base correcta y copia `index.html` como `404.html` para que las rutas de Angular funcionen al abrirlas o recargarlas directamente. El sitio y el código estático son públicos; no pongas secretos en el cliente.
+
+Google permite que cualquier cuenta Google inicie el flujo de autenticación. La restricción de dominios autorizados controla desde qué sitios se puede usar Firebase Auth, no qué direcciones de correo pueden entrar. Actualmente `firestore.rules` aplica una lista permitida de un solo UID: solo tu cuenta tiene acceso a los datos en la nube y las demás cuentas, aunque puedan autenticarse, no pueden leerlos ni modificarlos; la app sigue funcionando en local. Para invitar a otra persona, añade su UID autenticado a la regla y publícala en Firebase Console. Es más seguro autorizar UIDs que direcciones de correo. Bloquear cuentas no autorizadas antes de que completen el login requiere una función de bloqueo de Firebase Authentication (Identity Platform) o restringir la organización Google, no basta con esconder el botón en una web estática.
+
 Al cerrar sesión solo se desactiva la sincronización: no se borra la copia local ni la colección remota. Conserva los respaldos JSON; el plan Spark no incluye backups automáticos de Firestore. La ubicación elegida para Firestore es permanente para esa base.
 
 Importación y exportación están en «Configuración», accesible desde el icono de engranaje. La exportación JSON versionada incluye selecciones, metadatos de carta, precios y álbumes. La importación restaura toda la colección, no mezcla datos: valida tamaño (5 MB), versión, especies, unicidad, importes, fechas, URLs HTTPS y referencias antes de pedir confirmación y guardar. Con sincronización automática activa, la colección restaurada se envía también a la nube.
