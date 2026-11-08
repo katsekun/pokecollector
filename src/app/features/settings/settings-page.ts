@@ -1,7 +1,8 @@
 import { Component, inject, signal } from '@angular/core';
 import { DatePipe, DOCUMENT } from '@angular/common';
 import { FirebaseAuthService } from '../../core/firebase-auth';
-import { FirebaseCloudSync } from '../../core/firebase-cloud-sync';
+import { FirebaseCloudSync, SyncConflictReview } from '../../core/firebase-cloud-sync';
+import { resolveCollectionMerge } from '../../core/firebase-collection';
 import { CollectionStore } from '../../core/collection-store';
 import { Icon } from '../../shared/icon';
 
@@ -81,6 +82,118 @@ import { Icon } from '../../shared/icon';
         </button>
       </div>
     </section>
+    @if (sync._conflict(); as review) {
+      <section class="settings" aria-labelledby="conflict-heading">
+        <div class="settings__heading">
+          <app-icon name="refresh" />
+          <h2 id="conflict-heading">
+            Diferencias con la nube ({{ review.plan.conflicts.length }})
+          </h2>
+        </div>
+        <p class="settings__conflict-note">
+          Elige qué versión conservar en cada caso. Antes de aplicar, puedes exportar un respaldo
+          local abajo.
+        </p>
+        <p class="settings__conflict-note">
+          Si eliges eliminar una carta, también se quitará de los álbumes que la incluyan.
+        </p>
+        @if (documentCount(review) > 450) {
+          <p class="settings__warning">
+            Esta comparación supera el límite de 450 documentos; no se puede aplicar
+            automáticamente. Conserva un respaldo y evita modificar las copias simultáneamente.
+          </p>
+        }
+        @for (conflict of review.plan.conflicts; track conflict.key) {
+          <fieldset class="settings__conflict">
+            <legend>{{ conflict.kind === 'entry' ? pokemonName(conflict.id) : 'Álbum' }}</legend>
+            <div class="settings__versions">
+              @for (side of sides; track side) {
+                <label class="settings__version">
+                  <span class="settings__version-heading">
+                    <input
+                      type="radio"
+                      [name]="conflict.key"
+                      [checked]="choice(review, conflict.key) === side"
+                      [disabled]="sync._status() === 'saving'"
+                      (change)="choose(review, conflict.key, side)"
+                    />
+                    <strong>{{ side === 'local' ? 'Este navegador' : 'Nube' }}</strong>
+                  </span>
+                  @if (conflict.kind === 'entry') {
+                    @if (conflict[side]; as entry) {
+                      <span
+                        >{{ entry.card.name }} · {{ entry.card.set }} #{{ entry.card.number }} ·
+                        {{ entry.card.language }}</span
+                      >
+                      <span
+                        >{{ entry.card.rarity }} · {{ entry.card.illustration }} · ID:
+                        {{ entry.card.id }}</span
+                      >
+                      <span
+                        >Número nacional: {{ entry.card.nationalId ?? 'Sin indicar' }} ·
+                        Confirmación de forma:
+                        {{ entry.card.requiresFormConfirmation ? 'Sí' : 'No' }}</span
+                      >
+                      <span>Origen: {{ entry.card.source }}</span>
+                      <span
+                        >Imagen: {{ entry.card.image ?? 'Sin imagen' }} · Proveedor:
+                        {{ entry.card.imageProvider ?? 'Sin indicar' }} · Idioma:
+                        {{ entry.card.imageLanguage ?? 'Sin indicar' }}</span
+                      >
+                      <span
+                        >{{ entry.status === 'owned' ? 'En colección' : 'En deseos' }} · Pagado:
+                        {{ money(entry.paidCents) }} · Valor: {{ money(entry.valueCents) }}</span
+                      >
+                      @if (entry.valuedAt) {
+                        <span>Valorado: {{ entry.valuedAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+                      }
+                      @if (entry.needsFormReview) {
+                        <span>Forma pendiente de revisión</span>
+                      }
+                    } @else {
+                      <span>Carta eliminada</span>
+                    }
+                  } @else {
+                    @if (conflict[side]; as album) {
+                      <span>{{ album.name }}</span>
+                      <span
+                        >{{ album.speciesIds.length }} cartas:
+                        {{ albumMembers(album.speciesIds) }}</span
+                      >
+                    } @else {
+                      <span>Álbum eliminado</span>
+                    }
+                  }
+                </label>
+              }
+            </div>
+          </fieldset>
+        }
+        <div class="settings__row settings__backup-actions">
+          <button
+            type="button"
+            class="button button--primary"
+            [disabled]="
+              !complete(review) ||
+              documentCount(review) > 450 ||
+              sync._status() === 'saving' ||
+              store._storageBlocked()
+            "
+            (click)="apply(review)"
+          >
+            Aplicar decisiones
+          </button>
+          <button
+            type="button"
+            class="button button--outline"
+            [disabled]="sync._status() === 'saving'"
+            (click)="sync.syncNow()"
+          >
+            <app-icon name="refresh" /> Actualizar comparación
+          </button>
+        </div>
+      </section>
+    }
     <section class="settings" aria-labelledby="backup-heading">
       <div class="settings__heading">
         <app-icon name="download" />
@@ -123,6 +236,54 @@ export class SettingsPage {
   protected readonly store = inject(CollectionStore);
   private readonly document = inject(DOCUMENT);
   protected readonly _feedback = signal('');
+  protected readonly sides = ['local', 'cloud'] as const;
+  private readonly _choices = signal<{
+    review: SyncConflictReview;
+    values: Record<string, 'local' | 'cloud'>;
+  } | null>(null);
+
+  protected choose(review: SyncConflictReview, key: string, side: 'local' | 'cloud'): void {
+    const values = this._choices()?.review === review ? this._choices()?.values : {};
+    this._choices.set({ review, values: { ...values, [key]: side } });
+  }
+
+  protected choice(review: SyncConflictReview, key: string): 'local' | 'cloud' | undefined {
+    return this._choices()?.review === review ? this._choices()?.values[key] : undefined;
+  }
+
+  protected complete(review: SyncConflictReview): boolean {
+    return review.plan.conflicts.every((conflict) => this.choice(review, conflict.key));
+  }
+
+  protected documentCount(review: SyncConflictReview): number {
+    const choices = this._choices();
+    if (choices?.review !== review || !this.complete(review)) return 0;
+    const merged = resolveCollectionMerge(review.plan, choices.values);
+    const entries = new Set(
+      [...review.cloud.entries, ...merged.entries].map((entry) => entry.speciesId),
+    );
+    const albums = new Set([...review.cloud.albums, ...merged.albums].map((album) => album.id));
+    return entries.size + albums.size;
+  }
+
+  protected apply(review: SyncConflictReview): void {
+    const choices = this._choices();
+    if (choices?.review === review && this.complete(review))
+      void this.sync.resolveConflicts(choices.values);
+  }
+
+  protected pokemonName(id: number): string {
+    const pokemon = this.store._allSpecies().find((item) => item.id === id);
+    return `${pokemon?.name ?? 'Pokémon'} #${pokemon?.nationalId ?? id}`;
+  }
+
+  protected albumMembers(ids: readonly number[]): string {
+    return ids.length ? ids.map((id) => this.pokemonName(id)).join(', ') : 'Sin cartas';
+  }
+
+  protected money(cents: number | null): string {
+    return cents === null ? 'Sin indicar' : `${(cents / 100).toFixed(2).replace('.', ',')} €`;
+  }
 
   protected exportBackup(): void {
     const url = URL.createObjectURL(

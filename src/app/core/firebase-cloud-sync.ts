@@ -5,11 +5,21 @@ import { FirebaseAuthService } from './firebase-auth';
 import { BROWSER_STORAGE } from './repositories';
 import {
   FirebaseCollectionRepository,
+  CollectionMergePlan,
   mergeCollections,
+  planCollectionMerge,
+  resolveCollectionMerge,
   validateCloudData,
 } from './firebase-collection';
 
 export type CloudSyncStatus = 'local' | 'paused' | 'connecting' | 'synced' | 'saving' | 'error';
+
+export interface SyncConflictReview {
+  readonly uid: string;
+  readonly local: CollectionData;
+  readonly cloud: CollectionData;
+  readonly plan: CollectionMergePlan;
+}
 
 @Injectable({ providedIn: 'root' })
 export class FirebaseCloudSync {
@@ -32,6 +42,7 @@ export class FirebaseCloudSync {
   public readonly _autoSync = signal(this.loadAutoSync());
   public readonly _settingError = signal('');
   public readonly _lastSyncedAt = signal<string | null>(null);
+  public readonly _conflict = signal<SyncConflictReview | null>(null);
 
   public constructor() {
     effect(() => {
@@ -46,6 +57,8 @@ export class FirebaseCloudSync {
         this.resetSession();
         return;
       }
+      if (this._conflict()?.uid !== user.uid) this._conflict.set(null);
+      if (this._conflict()) return;
       if (!autoSync) {
         this.pauseAutomaticSync();
         return;
@@ -72,6 +85,7 @@ export class FirebaseCloudSync {
     this.attemptedUid = '';
     this.lastUid = '';
     this.lastSaved = '';
+    this._conflict.set(null);
     this._lastSyncedAt.set(null);
     this._status.set('local');
     this._error.set('');
@@ -88,7 +102,7 @@ export class FirebaseCloudSync {
   public setAutoSync(enabled: boolean): void {
     if (this._autoSync() === enabled) return;
     if (!enabled) {
-      this.generation += 1;
+      if (!(this._conflict() && this._status() === 'saving')) this.generation += 1;
       this.attemptedUid = '';
       if (this.timer) clearTimeout(this.timer);
       this.timer = null;
@@ -122,6 +136,7 @@ export class FirebaseCloudSync {
     if (this._status() === 'connecting' || this._status() === 'saving') return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this._conflict.set(null);
     this._error.set('');
     void this.connect(uid);
   }
@@ -137,6 +152,7 @@ export class FirebaseCloudSync {
   public retry(): void {
     const uid = this.auth._user()?.uid;
     if (!uid) return;
+    this._conflict.set(null);
     if (!this._autoSync()) {
       this._status.set('paused');
       this.syncNow();
@@ -151,6 +167,66 @@ export class FirebaseCloudSync {
 
   public dismissError(): void {
     this._error.set('');
+  }
+
+  public async resolveConflicts(
+    choices: Readonly<Record<string, 'local' | 'cloud'>>,
+  ): Promise<void> {
+    const review = this._conflict();
+    if (!review || this.auth._user()?.uid !== review.uid || this._status() === 'saving') return;
+    if (this.store._storageBlocked()) return;
+    const generation = ++this.generation;
+    this._status.set('saving');
+    this._error.set('');
+    try {
+      const merged = validateCloudData(
+        resolveCollectionMerge(review.plan, choices),
+        this.store._allSpecies(),
+      );
+      if (this.fingerprint(this.store._collection()) !== this.fingerprint(review.local))
+        throw new Error('La colección local cambió. Vuelve a revisar los conflictos.');
+      const cloud = validateCloudData(
+        await this.repository.load(review.uid),
+        this.store._allSpecies(),
+      );
+      if (generation !== this.generation || this.auth._user()?.uid !== review.uid) return;
+      if (
+        this.fingerprint(this.store._collection()) !== this.fingerprint(review.local) ||
+        this.fingerprint(cloud) !== this.fingerprint(review.cloud)
+      )
+        throw new Error('La colección local o la nube cambiaron. Vuelve a revisar los conflictos.');
+      await this.repository.saveIfUnchanged(review.uid, cloud, merged);
+      if (generation !== this.generation || this.auth._user()?.uid !== review.uid) return;
+      if (this.fingerprint(this.store._collection()) !== this.fingerprint(review.local)) {
+        this.lastUid = '';
+        this.lastSaved = '';
+        throw new Error(
+          'La nube se actualizó, pero la colección local cambió durante el guardado y se ha conservado. Vuelve a sincronizar.',
+        );
+      }
+      if (!this.store.restore(JSON.stringify(createBackup(merged)))) {
+        this.lastUid = '';
+        this.lastSaved = '';
+        throw new Error(
+          'La nube se actualizó, pero no se pudo guardar la colección local. Vuelve a sincronizar.',
+        );
+      }
+      this.lastSaved = this.fingerprint(merged);
+      this.lastUid = review.uid;
+      this._lastSyncedAt.set(new Date().toISOString());
+      this._readyUid.set(review.uid);
+      this._conflict.set(null);
+      this._status.set(this._autoSync() ? 'synced' : 'paused');
+    } catch (error) {
+      if (generation !== this.generation || this.auth._user()?.uid !== review.uid) return;
+      this._readyUid.set('');
+      this._status.set('error');
+      this._error.set(this.messageFor(error));
+    } finally {
+      if (this.auth._user()?.uid !== review.uid && this._status() === 'saving') {
+        this._status.set(this._autoSync() ? 'local' : 'paused');
+      }
+    }
   }
 
   private async connect(uid: string): Promise<void> {
@@ -210,34 +286,18 @@ export class FirebaseCloudSync {
     local: CollectionData,
     cloud: CollectionData,
   ): CollectionData {
-    if (this.lastUid === uid && this.lastSaved) {
-      const localFingerprint = this.fingerprint(local);
-      const cloudFingerprint = this.fingerprint(cloud);
-      const localChanged = localFingerprint !== this.lastSaved;
-      const cloudChanged = cloudFingerprint !== this.lastSaved;
-      if (localChanged && cloudChanged && localFingerprint !== cloudFingerprint) {
-        throw new Error(
-          'La colección local y la nube cambiaron desde la última sincronización. No se han combinado ni subido cambios; exporta un respaldo antes de resolver el conflicto.',
-        );
-      }
-      return localChanged ? local : cloud;
-    }
-    const cloudEntries = new Map(cloud.entries.map((entry) => [entry.speciesId, entry]));
-    const cloudAlbums = new Map(cloud.albums.map((album) => [album.id, album]));
-    const conflictingEntry = local.entries.some((entry) => {
-      const remote = cloudEntries.get(entry.speciesId);
-      return remote && JSON.stringify(entry) !== JSON.stringify(remote);
-    });
-    const conflictingAlbum = local.albums.some((album) => {
-      const remote = cloudAlbums.get(album.id);
-      return remote && remote.name !== album.name;
-    });
-    if (conflictingEntry || conflictingAlbum) {
+    const baseline =
+      this.lastUid === uid && this.lastSaved
+        ? (JSON.parse(this.lastSaved) as CollectionData)
+        : undefined;
+    const plan = planCollectionMerge(local, cloud, baseline);
+    if (plan.conflicts.length) {
+      this._conflict.set({ uid, local, cloud, plan });
       throw new Error(
         'Hay cartas o álbumes con datos distintos en este navegador y en la nube. No se han combinado ni subido cambios; exporta un respaldo antes de resolver el conflicto.',
       );
     }
-    return mergeCollections(local, cloud);
+    return baseline ? resolveCollectionMerge(plan, {}) : mergeCollections(local, cloud);
   }
 
   private queueSave(uid: string, data: CollectionData): void {

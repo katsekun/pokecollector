@@ -38,6 +38,7 @@ describe('App', () => {
           useValue: {
             _status: signal('local'),
             _error: signal(''),
+            _conflict: signal(null),
             start: () => undefined,
             retry: () => undefined,
             dismissError: () => undefined,

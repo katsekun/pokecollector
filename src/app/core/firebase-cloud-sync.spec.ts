@@ -18,7 +18,13 @@ function configure(
   automatic = true,
 ) {
   const data = signal(local);
-  const repository = { load: vi.fn(async () => cloud), save: vi.fn(async () => undefined) };
+  const repository = {
+    load: vi.fn(async () => cloud),
+    save: vi.fn(async () => undefined),
+    saveIfUnchanged: vi.fn<
+      (...arguments_: [string, CollectionData, CollectionData]) => Promise<void>
+    >(async () => undefined),
+  };
   const auth = {
     _user: signal<{ uid: string; email: string } | null>({
       uid: 'personal-uid',
@@ -278,16 +284,143 @@ describe('Firebase cloud sync', () => {
     setup.service.syncNow();
     await vi.waitFor(() => expect(setup.repository.save).toHaveBeenCalledOnce());
     setup.repository.save.mockClear();
-    setup.data.set({ entries: [], albums: [{ id: 'local', name: 'Local', speciesIds: [] }] });
+    setup.data.set({ entries: [], albums: [{ id: 'shared', name: 'Local', speciesIds: [] }] });
     setup.repository.load.mockResolvedValueOnce({
       entries: [],
-      albums: [{ id: 'remote', name: 'Nube', speciesIds: [] }],
+      albums: [{ id: 'shared', name: 'Nube', speciesIds: [] }],
     });
     setup.service.syncNow();
     await vi.waitFor(() => expect(setup.service._status()).toBe('error'));
     expect(setup.service._error()).toContain('No se han combinado ni subido cambios');
-    expect(setup.data().albums.map((album) => album.id)).toEqual(['local']);
+    expect(setup.data().albums.map((album) => album.id)).toEqual(['shared']);
     expect(setup.repository.save).not.toHaveBeenCalled();
+  });
+  it('applies explicit choices through a checked cloud write', async () => {
+    const local: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Local', speciesIds: [] }],
+    };
+    const cloud: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Nube', speciesIds: [] }],
+    };
+    const setup = configure(local, cloud);
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._conflict()).not.toBeNull());
+    await setup.service.resolveConflicts({ 'album:shared': 'local' });
+    expect(setup.repository.saveIfUnchanged).toHaveBeenCalledWith('personal-uid', cloud, local);
+    expect(setup.data()).toEqual(local);
+    expect(setup.service._conflict()).toBeNull();
+    expect(setup.service._status()).toBe('synced');
+  });
+  it('refuses stale choices after a local or cloud change', async () => {
+    const local: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Local', speciesIds: [] }],
+    };
+    const cloud: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Nube', speciesIds: [] }],
+    };
+    const setup = configure(local, cloud);
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._conflict()).not.toBeNull());
+    setup.data.set({ entries: [], albums: [{ id: 'shared', name: 'Nuevo', speciesIds: [] }] });
+    await setup.service.resolveConflicts({ 'album:shared': 'cloud' });
+    expect(setup.repository.saveIfUnchanged).not.toHaveBeenCalled();
+    expect(setup.data().albums[0].name).toBe('Nuevo');
+    expect(setup.service._error()).toContain('cambió');
+    setup.data.set(local);
+    setup.repository.load.mockResolvedValueOnce({
+      entries: [],
+      albums: [{ id: 'shared', name: 'Nuevo remoto', speciesIds: [] }],
+    });
+    await setup.service.resolveConflicts({ 'album:shared': 'local' });
+    expect(setup.repository.saveIfUnchanged).not.toHaveBeenCalled();
+    expect(setup.service._error()).toContain('cambiaron');
+  });
+  it('preserves local edits made during the checked cloud write', async () => {
+    const local: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Local', speciesIds: [] }],
+    };
+    const cloud: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Nube', speciesIds: [] }],
+    };
+    const setup = configure(local, cloud);
+    let finish!: () => void;
+    setup.repository.saveIfUnchanged.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(undefined);
+        }),
+    );
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._conflict()).not.toBeNull());
+    const resolution = setup.service.resolveConflicts({ 'album:shared': 'cloud' });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    setup.data.set({ entries: [], albums: [{ id: 'shared', name: 'Editado', speciesIds: [] }] });
+    finish();
+    await resolution;
+    expect(setup.data().albums[0].name).toBe('Editado');
+    expect(setup.store.restore).not.toHaveBeenCalled();
+    expect(setup.service._error()).toContain('La nube se actualizó');
+  });
+  it('finishes an explicitly requested resolution when automatic sync is disabled during the write', async () => {
+    const local: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Local', speciesIds: [] }],
+    };
+    const cloud: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Nube', speciesIds: [] }],
+    };
+    const setup = configure(local, cloud);
+    let finish!: () => void;
+    setup.repository.saveIfUnchanged.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(undefined);
+        }),
+    );
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._conflict()).not.toBeNull());
+    const resolution = setup.service.resolveConflicts({ 'album:shared': 'cloud' });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    setup.service.setAutoSync(false);
+    finish();
+    await resolution;
+    expect(setup.data()).toEqual(cloud);
+    expect(setup.service._conflict()).toBeNull();
+    expect(setup.service._status()).toBe('paused');
+  });
+  it('does not restore the resolved collection after signing out during the write', async () => {
+    const local: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Local', speciesIds: [] }],
+    };
+    const cloud: CollectionData = {
+      entries: [],
+      albums: [{ id: 'shared', name: 'Nube', speciesIds: [] }],
+    };
+    const setup = configure(local, cloud);
+    let finish!: () => void;
+    setup.repository.saveIfUnchanged.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(undefined);
+        }),
+    );
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._conflict()).not.toBeNull());
+    const resolution = setup.service.resolveConflicts({ 'album:shared': 'cloud' });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    setup.auth._user.set(null);
+    finish();
+    await resolution;
+    expect(setup.store.restore).not.toHaveBeenCalled();
+    expect(setup.data()).toEqual(local);
   });
   it('does not contact the cloud when automatic sync is disabled and syncs on demand', async () => {
     const setup = configure(EMPTY_COLLECTION, EMPTY_COLLECTION, false);

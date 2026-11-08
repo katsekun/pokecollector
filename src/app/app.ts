@@ -125,9 +125,18 @@ import { Icon } from './shared/icon';
         @if (cloudSync._error()) {
           <div class="notice notice--error" role="alert">
             <span>{{ cloudSync._error() }}</span>
-            <button type="button" class="button button--outline" (click)="cloudSync.retry()">
-              Reintentar nube
-            </button>
+            @if (cloudSync._conflict()) {
+              <a
+                routerLink="/configuracion"
+                fragment="conflict-heading"
+                class="button button--outline"
+                >Revisar conflictos</a
+              >
+            } @else {
+              <button type="button" class="button button--outline" (click)="cloudSync.retry()">
+                Reintentar nube
+              </button>
+            }
             <button
               type="button"
               class="icon-button"
