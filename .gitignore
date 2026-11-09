@@ -40,6 +40,10 @@ testem.log
 __screenshots__/
 /playwright-report/
 /test-results/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/
 
 # System files
 .DS_Store

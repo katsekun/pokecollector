@@ -58,7 +58,10 @@ import { Icon } from './shared/icon';
     <div class="workspace">
       <header class="topbar">
         <span class="topbar__label"
-          ><app-icon name="book" /> Pokecollector <span>/</span> Mi biblioteca</span
+          ><app-icon name="book" /> Pokecollector <span>/</span>
+          {{
+            store._scope().startsWith('group:') ? 'Colección del grupo' : 'Mi biblioteca personal'
+          }}</span
         >
         <div class="topbar__actions">
           <button

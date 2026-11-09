@@ -7,6 +7,8 @@ import { FirebaseAuthService } from './firebase-auth';
 import { FirebaseCloudSync } from './firebase-cloud-sync';
 import { FirebaseCollectionRepository } from './firebase-collection';
 import { BROWSER_STORAGE } from './repositories';
+import { Groups, Group } from './groups';
+import { GroupCollectionRepository, GroupSnapshot } from './group-collection';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -54,6 +56,201 @@ function configure(
   });
   return { data, repository, store, storage, auth, service: TestBed.inject(FirebaseCloudSync) };
 }
+
+function configureShared(local: CollectionData, cloud: CollectionData = local) {
+  const scope = signal('group:personal-uid:pair');
+  const data = signal(local);
+  const auth = {
+    _user: signal<{ uid: string; email: string } | null>({
+      uid: 'personal-uid',
+      email: 'owner@gmail.com',
+    }),
+  };
+  const group: Group = {
+    id: 'pair',
+    ownerUid: 'personal-uid',
+    ownerEmail: 'owner@gmail.com',
+    invitedEmail: 'friend@gmail.com',
+    memberUids: ['personal-uid', 'friend'],
+    contributedUids: ['personal-uid'],
+    status: 'active',
+    activeRevision: 'first',
+  };
+  const groups = signal<readonly Group[]>([group]);
+  let remote: GroupSnapshot = { data: cloud, revision: 'first' };
+  const shared = {
+    load: vi.fn(async () => remote),
+    save: vi.fn(
+      async (_groupId: string, _uid: string, expected: string, changed: CollectionData) => {
+        if (expected !== remote.revision) throw new Error('El grupo cambió.');
+        remote = { data: changed, revision: 'next' };
+        groups.set([{ ...group, activeRevision: 'next' }]);
+        return 'next';
+      },
+    ),
+  };
+  const personal = {
+    load: vi.fn(async () => EMPTY_COLLECTION),
+    save: vi.fn(async () => undefined),
+  };
+  const store = {
+    _scope: scope,
+    _collection: data,
+    _allSpecies: signal([{ id: 1, name: 'Bulbasaur', generation: 1 }]),
+    _isLoading: signal(false),
+    _storageBlocked: signal(false),
+    switchScope: vi.fn((target: string) => {
+      scope.set(target);
+      data.set(EMPTY_COLLECTION);
+      return true;
+    }),
+    restore: vi.fn((text: string) => {
+      const backup = JSON.parse(text) as CollectionData;
+      data.set({ entries: backup.entries, albums: backup.albums });
+      return true;
+    }),
+  };
+  const storage = new Map<string, string>();
+  TestBed.configureTestingModule({
+    providers: [
+      FirebaseCloudSync,
+      { provide: FirebaseAuthService, useValue: auth },
+      { provide: CollectionStore, useValue: store },
+      { provide: FirebaseCollectionRepository, useValue: personal },
+      { provide: GroupCollectionRepository, useValue: shared },
+      {
+        provide: Groups,
+        useValue: { _groups: groups, _loaded: signal(true), _busy: signal(false) },
+      },
+      {
+        provide: BROWSER_STORAGE,
+        useValue: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => storage.set(key, value),
+        },
+      },
+    ],
+  });
+  return {
+    scope,
+    data,
+    store,
+    shared,
+    groups,
+    group,
+    personal,
+    auth,
+    service: TestBed.inject(FirebaseCloudSync),
+    changeRemote: (changed: CollectionData, revision = 'remote') => {
+      remote = { data: changed, revision };
+      groups.set([{ ...group, activeRevision: revision }]);
+    },
+  };
+}
+
+describe('Shared collection synchronization', () => {
+  it('rebases edits made during publication without dropping remote additions', async () => {
+    const setup = configureShared(EMPTY_COLLECTION);
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._status()).toBe('synced'));
+    setup.service.setAutoSync(false);
+    const remote: CollectionData = {
+      entries: [],
+      albums: [{ id: 'remote', name: 'Remoto', speciesIds: [] }],
+    };
+    setup.changeRemote(remote, 'remote');
+    setup.data.set({ entries: [], albums: [{ id: 'local', name: 'Local', speciesIds: [] }] });
+    let finish!: (revision: string) => void;
+    setup.shared.save.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    setup.service.syncNow();
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    setup.data.set({
+      entries: [],
+      albums: [{ id: 'local', name: 'Más reciente', speciesIds: [] }],
+    });
+    finish('next');
+    await vi.waitFor(() =>
+      expect(
+        setup
+          .data()
+          .albums.map((album) => album.name)
+          .sort(),
+      ).toEqual(['Más reciente', 'Remoto']),
+    );
+    expect(setup.personal.save).not.toHaveBeenCalled();
+  });
+  it('downloads a group without using or writing the personal repository', async () => {
+    const cloud: CollectionData = {
+      entries: [],
+      albums: [{ id: 'album', name: 'Grupo', speciesIds: [] }],
+    };
+    const setup = configureShared(EMPTY_COLLECTION, cloud);
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._status()).toBe('synced'));
+    expect(setup.data()).toEqual(cloud);
+    expect(setup.personal.load).not.toHaveBeenCalled();
+    expect(setup.personal.save).not.toHaveBeenCalled();
+    expect(setup.shared.save).not.toHaveBeenCalled();
+  });
+  it('publishes edits against the last-read revision and keeps a separate local baseline', async () => {
+    const setup = configureShared(EMPTY_COLLECTION);
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._status()).toBe('synced'));
+    setup.data.set({ entries: [], albums: [{ id: 'album', name: 'Editado', speciesIds: [] }] });
+    await vi.waitFor(() => expect(setup.shared.save).toHaveBeenCalled(), { timeout: 3000 });
+    await vi.waitFor(() => expect(setup.service._status()).toBe('synced'));
+    expect(setup.shared.save).toHaveBeenCalledWith('pair', 'personal-uid', 'first', setup.data());
+    expect(setup.personal.save).not.toHaveBeenCalled();
+  });
+  it('downloads another member edits and returns to personal on closure while keeping group cache untouched', async () => {
+    const setup = configureShared(EMPTY_COLLECTION);
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._status()).toBe('synced'));
+    const remote: CollectionData = {
+      entries: [],
+      albums: [{ id: 'album', name: 'Remoto', speciesIds: [] }],
+    };
+    setup.changeRemote(remote);
+    await vi.waitFor(() => expect(setup.data()).toEqual(remote));
+    setup.groups.set([{ ...setup.group, status: 'closed', activeRevision: 'remote' }]);
+    await vi.waitFor(() => expect(setup.scope()).toBe('personal:personal-uid'));
+    expect(setup.store.switchScope).toHaveBeenCalledWith('personal:personal-uid');
+  });
+  it('blocks switching scopes during a shared publication', async () => {
+    const setup = configureShared(EMPTY_COLLECTION);
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._status()).toBe('synced'));
+    let finish!: (revision: string) => void;
+    setup.shared.save.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    setup.data.set({ entries: [], albums: [{ id: 'album', name: 'Local', speciesIds: [] }] });
+    await vi.waitFor(() => expect(finish).toBeDefined(), { timeout: 3000 });
+    expect(setup.service.openCollection('personal:personal-uid')).toBe(false);
+    finish('next');
+    await vi.waitFor(() => expect(setup.service._status()).toBe('synced'));
+    expect(setup.scope()).toBe('group:personal-uid:pair');
+  });
+  it('does not publish shared local edits after an account switch', async () => {
+    const setup = configureShared(EMPTY_COLLECTION);
+    setup.service.start();
+    await vi.waitFor(() => expect(setup.service._status()).toBe('synced'));
+    setup.data.set({ entries: [], albums: [{ id: 'album', name: 'Pendiente', speciesIds: [] }] });
+    await TestBed.tick();
+    setup.auth._user.set({ uid: 'another', email: 'another@gmail.com' });
+    await vi.waitFor(() => expect(setup.scope()).toBe('personal:another'));
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    expect(setup.shared.save).not.toHaveBeenCalled();
+  });
+});
 
 describe('Firebase cloud sync', () => {
   it('reports an in-flight cloud save failure even if automatic sync was disabled', async () => {

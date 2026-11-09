@@ -1,0 +1,130 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function allowed() {
+      return request.auth != null && request.auth.uid in [
+        'TgkbqxWePHSWYHZijMXoLSl66j83'
+        // Add allowed UIDs here, separated by commas.
+      ];
+    }
+    function verified() {
+      return allowed() && request.auth.token.email_verified == true;
+    }
+    function groupPath(id) {
+      return /databases/$(database)/documents/groups/$(id);
+    }
+    function invitePath(id) {
+      return /databases/$(database)/documents/groupInvitations/$(id);
+    }
+    function statePath(uid) {
+      return /databases/$(database)/documents/userGroupState/$(uid);
+    }
+    function member(id) {
+      return allowed() && request.auth.uid in get(groupPath(id)).data.memberUids;
+    }
+    function available(uid) {
+      return !exists(statePath(uid)) ||
+        get(groupPath(get(statePath(uid)).data.groupId)).data.status == 'closed';
+    }
+    function groupShape(data) {
+      return data.keys().hasOnly(['ownerUid', 'ownerEmail', 'invitedEmail', 'memberUids', 'contributedUids', 'status', 'activeRevision']) &&
+        data.ownerUid is string && data.ownerEmail is string && data.invitedEmail is string &&
+        data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 2 &&
+        data.memberUids.toSet().size() == data.memberUids.size() &&
+        data.ownerUid in data.memberUids && data.contributedUids is list &&
+        data.memberUids.hasAll(data.contributedUids) && data.contributedUids.toSet().size() == data.contributedUids.size() &&
+        data.status in ['pending', 'active', 'closed'] && data.activeRevision is string;
+    }
+
+    match /users/{uid}/entries/{id} {
+      allow read, write: if allowed() && request.auth.uid == uid;
+    }
+    match /users/{uid}/albums/{id} {
+      allow read, write: if allowed() && request.auth.uid == uid;
+    }
+    match /userGroupState/{uid} {
+      allow read: if allowed() && request.auth.uid == uid;
+      allow create, update: if verified() && request.auth.uid == uid && available(uid) &&
+        request.resource.data.keys().hasOnly(['groupId']) && request.resource.data.groupId is string &&
+        request.auth.uid in getAfter(groupPath(request.resource.data.groupId)).data.memberUids &&
+        getAfter(groupPath(request.resource.data.groupId)).data.status != 'closed';
+    }
+    match /groupInvitations/{id} {
+      allow get: if member(id) || (verified() && (resource.data.senderUid == request.auth.uid || resource.data.recipientEmail == request.auth.token.email));
+      allow list: if verified() && (resource.data.senderUid == request.auth.uid || resource.data.recipientEmail == request.auth.token.email);
+      allow create: if verified() && member(id) && get(groupPath(id)).data.ownerUid == request.auth.uid &&
+        get(groupPath(id)).data.status == 'pending' && get(groupPath(id)).data.activeRevision != '' &&
+        request.resource.data.keys().hasOnly(['groupId', 'senderUid', 'senderEmail', 'recipientEmail', 'state']) &&
+        request.resource.data.groupId == id && request.resource.data.senderUid == request.auth.uid &&
+        request.resource.data.senderEmail == request.auth.token.email &&
+        request.resource.data.recipientEmail == get(groupPath(id)).data.invitedEmail &&
+        request.resource.data.state == 'pending';
+      allow update: if verified() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']) &&
+        ((resource.data.state == 'pending' && request.resource.data.state == 'claimed' &&
+          resource.data.recipientEmail == request.auth.token.email &&
+          request.auth.uid in getAfter(groupPath(id)).data.memberUids && getAfter(statePath(request.auth.uid)).data.groupId == id) ||
+        (request.resource.data.state == 'closed' && member(id) && getAfter(groupPath(id)).data.status == 'closed'));
+    }
+    match /groups/{id} {
+      allow list: if allowed() && request.auth.uid in resource.data.memberUids;
+      allow get: if member(id) || (verified() && exists(invitePath(id)) &&
+        get(invitePath(id)).data.recipientEmail == request.auth.token.email && get(invitePath(id)).data.state == 'pending');
+      allow create: if verified() && available(request.auth.uid) && groupShape(request.resource.data) &&
+        request.resource.data.ownerUid == request.auth.uid && request.resource.data.ownerEmail == request.auth.token.email &&
+        request.resource.data.invitedEmail != request.auth.token.email &&
+        request.resource.data.memberUids == [request.auth.uid] && request.resource.data.contributedUids == [] &&
+        request.resource.data.status == 'pending' && request.resource.data.activeRevision == '' &&
+        getAfter(statePath(request.auth.uid)).data.groupId == id;
+      allow update: if verified() && resource.data.status != 'closed' && groupShape(request.resource.data) &&
+        (claimGroup(id) || closeGroup() || publishGroup(id));
+
+      function claimGroup(id) {
+        return resource.data.status == 'pending' && resource.data.activeRevision != '' && resource.data.memberUids.size() == 1 &&
+          !(request.auth.uid in resource.data.memberUids) && available(request.auth.uid) &&
+          resource.data.invitedEmail == request.auth.token.email &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'status']) &&
+          request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
+          request.resource.data.status == 'active' &&
+          get(invitePath(id)).data.state == 'pending' && getAfter(invitePath(id)).data.state == 'claimed' &&
+          getAfter(statePath(request.auth.uid)).data.groupId == id;
+      }
+      function closeGroup() {
+        return request.auth.uid in resource.data.memberUids &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && request.resource.data.status == 'closed';
+      }
+      function publishGroup(id) {
+        let revision = getAfter(/databases/$(database)/documents/groups/$(id)/revisions/$(request.resource.data.activeRevision)).data;
+        return request.auth.uid in resource.data.memberUids &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activeRevision', 'contributedUids']) &&
+          request.resource.data.activeRevision != resource.data.activeRevision &&
+          revision.state == 'published' && revision.authorUid == request.auth.uid && revision.baseRevision == resource.data.activeRevision &&
+          (request.resource.data.contributedUids == resource.data.contributedUids ||
+            (!(request.auth.uid in resource.data.contributedUids) && request.resource.data.contributedUids == resource.data.contributedUids.concat([request.auth.uid])));
+      }
+      match /revisions/{revisionId} {
+        allow read: if member(id);
+        allow create: if verified() && member(id) && get(groupPath(id)).data.status != 'closed' &&
+          request.resource.data.keys().hasOnly(['count', 'bytes', 'checksum', 'authorUid', 'baseRevision', 'state']) &&
+          request.resource.data.authorUid == request.auth.uid && request.resource.data.state == 'staging' &&
+          request.resource.data.baseRevision == get(groupPath(id)).data.activeRevision &&
+          request.resource.data.count is int && request.resource.data.count >= 1 && request.resource.data.count <= 313 &&
+          request.resource.data.bytes is int && request.resource.data.bytes >= 1 && request.resource.data.bytes <= 5000000 &&
+          request.resource.data.checksum is string && request.resource.data.checksum.matches('[0-9a-f]{64}');
+        allow update: if verified() && member(id) && get(groupPath(id)).data.status != 'closed' &&
+          resource.data.authorUid == request.auth.uid && resource.data.state == 'staging' &&
+          resource.data.baseRevision == get(groupPath(id)).data.activeRevision &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']) && request.resource.data.state == 'published' &&
+          getAfter(groupPath(id)).data.activeRevision == revisionId;
+        match /chunks/{chunkId} {
+          allow read: if member(id);
+          allow create: if verified() && member(id) && get(groupPath(id)).data.status != 'closed' &&
+            get(/databases/$(database)/documents/groups/$(id)/revisions/$(revisionId)).data.authorUid == request.auth.uid &&
+            getAfter(/databases/$(database)/documents/groups/$(id)/revisions/$(revisionId)).data.state == 'staging' &&
+            chunkId.matches('[0-9]{1,3}') && int(chunkId) < get(/databases/$(database)/documents/groups/$(id)/revisions/$(revisionId)).data.count &&
+            request.resource.data.keys().hasOnly(['payload']) && request.resource.data.payload is string && request.resource.data.payload.size() <= 64000;
+        }
+      }
+    }
+  }
+}

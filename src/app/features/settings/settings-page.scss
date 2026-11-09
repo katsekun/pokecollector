@@ -58,6 +58,16 @@
   color: var(--danger);
   font-size: 0.75rem;
 }
+.settings__email {
+  display: block;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0.65rem 0 1rem;
+  padding: 0.65rem;
+}
+.settings__toggle {
+  margin-bottom: 0.65rem;
+}
 .settings__conflict-note {
   color: var(--muted);
   font-size: 0.8rem;

@@ -73,7 +73,7 @@ Documentación de TCGdex: [integración de mercados y ejemplos](https://tcgdex.d
 
 ## Guardado y respaldos
 
-La aplicación siempre conserva una copia local en `localStorage`, clave `pokecollector.collection.v1`. Sin iniciar sesión, funciona íntegramente en local. Desde «Configuración» se puede activar o desactivar la sincronización automática y ejecutar «Sincronizar ahora». La preferencia se guarda en cada navegador por separado y está activada por defecto para mantener el comportamiento anterior. Con el modo automático desactivado no se inician lecturas ni escrituras de Firestore al iniciar sesión ni al editar; las operaciones ya enviadas pueden terminar. El botón manual requiere sesión, conexión y almacenamiento local no bloqueado.
+La aplicación conserva copias locales en `localStorage`: la clave anterior `pokecollector.collection.v1` queda intacta para uso sin sesión y recuperación explícita; las personales usan un sufijo por UID y las compartidas otro por UID y grupo. Al iniciar sesión se abre la personal de esa cuenta, que puede descargar su copia de Firestore. No se asigna automáticamente la colección antigua a una cuenta: «Recuperar copia anterior del navegador» permite combinarla con revisión de diferencias. Desde «Configuración» se puede activar o desactivar la sincronización automática y ejecutar «Sincronizar ahora». La preferencia se guarda en cada navegador por separado y está activada por defecto. Con el modo automático desactivado no se inician lecturas ni escrituras de la colección al editar; las operaciones ya enviadas pueden terminar. La consulta de metadatos e invitaciones de grupos al abrir Configuración y las acciones explícitas de grupo son independientes de esa opción. El botón manual requiere sesión, conexión y almacenamiento local no bloqueado.
 
 En la primera sincronización de una sesión se fusionan ambas copias sin mostrar una confirmación: se conservan las entradas únicas de cada una y se unen los miembros de álbumes coincidentes. Si la misma entrada tiene datos distintos en local y en la nube, o un álbum compartido tiene nombres diferentes, se detiene la sincronización sin modificar ninguna copia. Desde «Revisar conflictos» en Configuración se comparan las versiones y se elige una para cada carta o álbum; conviene exportar antes un respaldo local. Eliminar una carta también la quita de los álbumes. «Actualizar comparación» descarta las elecciones anteriores y vuelve a leer la nube.
 
@@ -89,7 +89,23 @@ La integración Firebase está configurada para el proyecto `pokecollector-8c894
 4. Comprueba que el UID mostrado al iniciar sesión coincide con el propietario configurado en `firestore.rules`. Publica el contenido completo de ese archivo en Firebase Console → Firestore Database → Rules → Publish. La regla local no se aplica automáticamente a Firebase.
 5. Vuelve a la aplicación y pulsa «Reintentar nube». La primera sincronización combina las entradas y álbumes sin pedir confirmación, salvo que existan datos contradictorios; en ese caso se detiene y muestra un aviso. Después, los cambios se guardan primero en local y se suben automáticamente si la opción sigue activada.
 
-Las reglas deniegan el acceso salvo cuando el UID autenticado coincide tanto con el UID de la ruta como con el propietario configurado. No cambies la regla por una condición genérica de «usuario autenticado». Prueba desde una segunda cuenta que no pueda leer ni escribir. El login de Google por sí solo no da acceso a Firestore.
+Las reglas personales deniegan el acceso salvo cuando el UID autenticado coincide con el UID de la ruta y figura en la whitelist. No cambies la regla por una condición genérica de «usuario autenticado». Prueba desde una cuenta no permitida que no pueda leer ni escribir. El login de Google por sí solo no da acceso a Firestore.
+
+## Grupos compartidos sin backend
+
+Configuración permite crear una agrupación de dos cuentas mediante el correo Google exacto del destinatario. Ambos UID deben estar en la whitelist. Antes de publicar las reglas locales, conserva en `allowed()` todos los UID que ya autorizaste en Firebase Console: la copia del repositorio solo incluye el propietario conocido. No se despliegan reglas automáticamente ni se envían emails.
+
+El creador confirma compartir una copia completa de su personal. Al abrir Configuración, el destinatario se vincula por su correo verificado, sin botón «Aceptar», siempre que no tenga otra agrupación activa. Esta vinculación no aporta su colección privada: «Revisar aportación personal» muestra las diferencias y requiere confirmación antes de combinar cartas, estados, precios y álbumes. Ambos pueden abrir Personal o Grupo; las originales no se modifican al aportar. Las colecciones mantienen una sola selección por entrada de Pokédex, no copias independientes de una misma carta por participante.
+
+Las personales siguen en `users/{uid}/entries` y `albums`. El grupo guarda metadatos en `groups/{id}`, reservas por cuenta en `userGroupState/{uid}` e invitaciones restringidas por remitente/correo verificado en `groupInvitations/{id}`. Las colecciones compartidas se guardan en revisiones inmutables divididas en bloques (máximo 5.000.000 bytes, 5.000 cartas y 200 álbumes). Los bloques se preparan primero; una transacción publica la revisión solo si el grupo sigue abierto y la versión anterior no cambió. Los lectores validan manifest, checksum SHA-256 y respaldo completo antes de modificar la copia local. Un listener de los metadatos avisa de nuevas revisiones y cierres; los guardados compartidos, incluso automáticos, comprueban la revisión anterior y muestran conflictos en vez de sustituir cambios simultáneos.
+
+Cualquiera puede confirmar «Disolver agrupación». El cierre es irreversible: ambos vuelven a Personal, conservan acceso de lectura al archivo compartido y pueden exportarlo o combinarlo opcionalmente con su propia colección revisando diferencias. Los borradores locales no publicados se conservan por UID/grupo y pueden exportarse desde el archivo. El cierre no elimina documentos ni versiones antiguas y permite crear una nueva agrupación. Una invitación no vinculada no da acceso al archivo ni a las cartas privadas de su remitente.
+
+Los grupos requieren conexión para crear, vincular, aportar, publicar y disolver. La edición local conserva cambios pendientes; si el grupo se cerró mientras un dispositivo estaba desconectado, esos cambios no se publican y quedan en su borrador local. Cada revisión vuelve a guardar una copia completa: controla lecturas, escrituras y almacenamiento del plan Spark. No hay limpieza automática de revisiones ni facturación habilitada por la app. Las reglas validan identidades, membresía, estados y límites del manifest, pero no pueden verificar el contenido completo de 5 MB en una sola evaluación: un editor autorizado puede publicar datos inválidos, que el cliente rechazará conservando su última copia válida. Los editores comparten permiso para modificar o borrar contenido y deben ser personas de confianza. La recuperación a Personal sigue el protocolo personal existente, no una transacción global entre localStorage y Firestore.
+
+### Pruebas de permisos
+
+Instala Java 21 o superior disponible en `PATH` y ejecuta `npm run test:rules`. Usa únicamente `demo-pokecollector` y Firestore Emulator; el script rechaza ejecutar pruebas sin `FIRESTORE_EMULATOR_HOST`. Los UID de prueba se introducen solo en las reglas del emulador. Las pruebas comprueban privacidad personal, consultas por correo/membresía, unión recíproca, grupo único, inmutabilidad de bloques, carreras de publicación/cierre y el batch máximo de 5 MB. Los recorridos Playwright de grupos usan dos cuentas/repositorios simulados y bloquean peticiones a Firestore real.
 
 ## Publicar en GitHub Pages
 
@@ -115,7 +131,9 @@ Un archivo inválido o un fallo de escritura mantiene el estado anterior. Si el 
 - `src/app/core/firebase-auth.ts`: inicio/cierre de sesión Google y restauración diferida de Auth.
 - `src/app/core/firebase-collection.ts`: lecturas, escrituras por documento y fusión local/remota.
 - `src/app/core/firebase-cloud-sync.ts`: sincronización de sesión y reintentos, manteniendo local primero.
-- `firestore.rules`: acceso denegado salvo el UID personal configurado explícitamente.
+- `src/app/core/groups.ts`: agrupaciones, reservas e invitaciones por correo verificado.
+- `src/app/core/group-collection.ts`: revisiones por bloques, integridad y publicación transaccional.
+- `firestore.rules`: whitelist, aislamiento personal, permisos de grupo y revisiones inmutables.
 - `src/app/core/catalog-query.ts`: búsqueda, filtros y ordenación.
 - `src/app/core/pokemon-forms.ts`: número nacional y reconocimiento conservador de formas.
 - `src/app/core/tcgdex-catalog.ts`: adaptador REST TCGdex, validación, paginación y caché de sesión.
@@ -175,4 +193,4 @@ Las ilustraciones, nombres y marcas pertenecen a sus titulares. Proyecto persona
 
 ## Pendiente
 
-Login y sincronización Firebase están implementados, pero la nube seguirá bloqueada hasta publicar `firestore.rules` en Firebase Console. Faltan pruebas contra Firebase Emulator Suite y completar la publicación en GitHub Pages. Precios automáticos, PWA, CSV y múltiples cartas/copias por forma quedan fuera de esta versión. Los filtros de idioma, expansión e ilustración de la Pokédex actúan sobre tus cartas elegidas, no sobre una indexación completa del catálogo TCGdex.
+Login, sincronización y grupos están implementados; los grupos requieren publicar las reglas actualizadas conservando la whitelist. Hay pruebas de permisos contra Firebase Emulator Suite y recorridos de dos cuentas simuladas en Playwright; no se ejecutan pruebas sobre Firestore de producción. GitHub Pages publica mediante el workflow del repositorio. Precios automáticos, PWA, CSV, grupos de más de dos miembros y múltiples cartas/copias por forma quedan fuera de esta versión. Los filtros de idioma, expansión e ilustración de la Pokédex actúan sobre tus cartas elegidas, no sobre una indexación completa del catálogo TCGdex.

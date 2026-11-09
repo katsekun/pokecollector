@@ -26,6 +26,7 @@ export class CollectionStore {
   private readonly _loadError = signal('');
   private readonly _message = signal('');
   private readonly _writeBlocked = signal(false);
+  public readonly _scope = signal('guest');
 
   public readonly _collection = this._data.asReadonly();
   public readonly _allSpecies = this._species.asReadonly();
@@ -75,7 +76,7 @@ export class CollectionStore {
       this._species.set(catalog.species);
       this._cards.set(catalog.cards);
       try {
-        this._data.set(this.collectionRepository.load(catalog.species));
+        this._data.set(this.collectionRepository.load(catalog.species, this._scope()));
         this._writeBlocked.set(false);
       } catch {
         this._writeBlocked.set(true);
@@ -200,6 +201,32 @@ export class CollectionStore {
     return JSON.stringify(createBackup(this._data()), null, 2);
   }
 
+  public readScope(scope: string): CollectionData {
+    return this.collectionRepository.load(this._species(), scope);
+  }
+
+  public switchScope(scope: string, isolateOnFailure = false): boolean {
+    if (scope === this._scope()) return true;
+    try {
+      const data = this.readScope(scope);
+      this._scope.set(scope);
+      this._data.set({ entries: data.entries, albums: data.albums });
+      this._writeBlocked.set(false);
+      this._message.set('');
+      return true;
+    } catch {
+      if (isolateOnFailure) {
+        this._scope.set(scope);
+        this._data.set(EMPTY_COLLECTION);
+        this._writeBlocked.set(true);
+      }
+      this._message.set(
+        'No se pudo abrir esta colección. Se conserva la copia actual y no se sincronizará con otro ámbito.',
+      );
+      return false;
+    }
+  }
+
   public inspectBackup(text: string) {
     return parseBackup(text, this._species());
   }
@@ -229,7 +256,8 @@ export class CollectionStore {
     }
     try {
       const validated = parseBackup(JSON.stringify(createBackup(data)), this._species());
-      this.collectionRepository.save(validated);
+      if (this._scope() === 'guest') this.collectionRepository.save(validated);
+      else this.collectionRepository.save(validated, this._scope());
       this._data.set({ entries: validated.entries, albums: validated.albums });
       this._writeBlocked.set(false);
       this._message.set('');

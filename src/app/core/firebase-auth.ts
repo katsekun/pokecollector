@@ -4,6 +4,7 @@ import { FIREBASE_CONFIG } from './firebase-config';
 export interface FirebaseUser {
   readonly uid: string;
   readonly email: string | null;
+  readonly emailVerified: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -52,7 +53,9 @@ export class FirebaseAuthService {
       authSdk.onAuthStateChanged(
         auth,
         (user) => {
-          this._user.set(user ? { uid: user.uid, email: user.email } : null);
+          this._user.set(
+            user ? { uid: user.uid, email: user.email, emailVerified: user.emailVerified } : null,
+          );
           this._loading.set(false);
           this._error.set('');
         },

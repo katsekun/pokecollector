@@ -75,7 +75,12 @@ describe('CollectionStore', () => {
       1, 2, 3, 4, 5, 6, 7, 8, 9,
     ]);
     expect(store._generations()[0]).toMatchObject({ id: 1, total: 2, owned: 1 });
-    expect(store._generations().slice(1).every((generation) => generation.total === 1)).toBe(true);
+    expect(
+      store
+        ._generations()
+        .slice(1)
+        .every((generation) => generation.total === 1),
+    ).toBe(true);
     expect(store._allSpecies().map((pokemon) => pokemon.generation)).toEqual(generations);
   });
 
@@ -88,6 +93,40 @@ describe('CollectionStore', () => {
     expect(store.selectCard(card)).toBe(false);
     expect(store._entries()).toEqual([]);
     expect(store._notice()).toContain('No se pudo guardar');
+  });
+  it('loads the target scope before switching and keeps the current scope on read failure', async () => {
+    const store = TestBed.inject(CollectionStore);
+    await store.initialize();
+    store.selectCard(card);
+    repository.load.mockReturnValue({
+      entries: [],
+      albums: [{ id: 'group', name: 'Group', speciesIds: [] }],
+    });
+    expect(store.switchScope('group:one')).toBe(true);
+    expect(store._scope()).toBe('group:one');
+    expect(store._entries()).toEqual([]);
+    store.saveAlbum('Another');
+    expect(repository.save.mock.calls.at(-1)?.[1]).toBe('group:one');
+    repository.load.mockImplementation(() => {
+      throw new Error('Corrupt');
+    });
+    expect(store.switchScope('personal:one')).toBe(false);
+    expect(store._scope()).toBe('group:one');
+    expect(store._albums()).toHaveLength(2);
+  });
+  it('hides the previous account on a failed account switch without overwriting either stored copy', async () => {
+    const store = TestBed.inject(CollectionStore);
+    await store.initialize();
+    store.selectCard(card);
+    repository.save.mockClear();
+    repository.load.mockImplementation(() => {
+      throw new Error('Storage blocked');
+    });
+    expect(store.switchScope('personal:another', true)).toBe(false);
+    expect(store._scope()).toBe('personal:another');
+    expect(store._entries()).toEqual([]);
+    expect(store._storageBlocked()).toBe(true);
+    expect(repository.save).not.toHaveBeenCalled();
   });
 
   it('persists selections, prices and albums without duplicate inventory', async () => {

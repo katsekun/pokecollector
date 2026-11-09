@@ -20,8 +20,8 @@ export abstract class CardCatalogRepository {
 }
 
 export abstract class CollectionRepository {
-  public abstract load(species: readonly PokemonSpecies[]): CollectionData;
-  public abstract save(data: CollectionData): void;
+  public abstract load(species: readonly PokemonSpecies[], scope?: string): CollectionData;
+  public abstract save(data: CollectionData, scope?: string): void;
 }
 
 export const BROWSER_STORAGE = new InjectionToken<Storage | null>('browser-storage', {
@@ -58,14 +58,20 @@ export class LocalCollectionRepository extends CollectionRepository {
   private readonly storage = inject(BROWSER_STORAGE);
   public static readonly key = 'pokecollector.collection.v1';
 
-  public override load(species: readonly PokemonSpecies[]): CollectionData {
+  public override load(species: readonly PokemonSpecies[], scope = 'guest'): CollectionData {
     if (!this.storage) throw new Error('El navegador no permite acceder al almacenamiento local.');
-    const text = this.storage.getItem(LocalCollectionRepository.key);
+    const text = this.storage.getItem(this.scopeKey(scope));
     return text === null ? EMPTY_COLLECTION : parseBackup(text, species);
   }
 
-  public override save(data: CollectionData): void {
+  public override save(data: CollectionData, scope = 'guest'): void {
     if (!this.storage) throw new Error('El navegador no permite guardar la colección.');
-    this.storage.setItem(LocalCollectionRepository.key, JSON.stringify(createBackup(data)));
+    this.storage.setItem(this.scopeKey(scope), JSON.stringify(createBackup(data)));
+  }
+
+  private scopeKey(scope: string): string {
+    return scope === 'guest'
+      ? LocalCollectionRepository.key
+      : `${LocalCollectionRepository.key}:${encodeURIComponent(scope)}`;
   }
 }

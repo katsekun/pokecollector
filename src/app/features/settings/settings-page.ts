@@ -5,10 +5,11 @@ import { FirebaseCloudSync, SyncConflictReview } from '../../core/firebase-cloud
 import { resolveCollectionMerge } from '../../core/firebase-collection';
 import { CollectionStore } from '../../core/collection-store';
 import { Icon } from '../../shared/icon';
+import { GroupSettings } from './group-settings';
 
 @Component({
   selector: 'app-settings-page',
-  imports: [DatePipe, Icon],
+  imports: [DatePipe, Icon, GroupSettings],
   styleUrl: './settings-page.scss',
   template: `
     <div class="page-heading">
@@ -194,6 +195,7 @@ import { Icon } from '../../shared/icon';
         </div>
       </section>
     }
+    <app-group-settings />
     <section class="settings" aria-labelledby="backup-heading">
       <div class="settings__heading">
         <app-icon name="download" />
@@ -256,6 +258,7 @@ export class SettingsPage {
   }
 
   protected documentCount(review: SyncConflictReview): number {
+    if (review.scope?.startsWith('group:')) return 0;
     const choices = this._choices();
     if (choices?.review !== review || !this.complete(review)) return 0;
     const merged = resolveCollectionMerge(review.plan, choices.values);
